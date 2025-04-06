@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>beercounter.it 🍻</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- HEADER con logo -->
+  <header class="site-header">
+    <img src="images/2.png" alt="Logo beercounter.it" class="logo">
+  </header>
+
+  <!-- HOME PAGE -->
+  <main class="home">
+    <h1>beercounter.it 🍺</h1>
+    <p>La birra non si dimentica. E neanche chi deve pagarla.</p>
+
+    <button id="login-btn" class="btn-primary">Accedi con Google</button>
+
+    <div class="note">
+      Nessuna registrazione necessaria<br>
+      Solo login con Google + un nickname personalizzato!
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <p>&copy; 2025 beercounter.it</p>
+  </footer>
+
+  <script type="module" src="script/auth.js"></script>
+
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyADSqmhWAOC1KQnfmMLrYylQY6EjokXUuw",
+    authDomain: "beercounter-fb28f.firebaseapp.com",
+    projectId: "beercounter-fb28f",
+    storageBucket: "beercounter-fb28f.firebasestorage.app",
+    messagingSenderId: "335079316540",
+    appId: "1:335079316540:web:fbef8c1307e1dcdcc6f739"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+</script>
+</body>
+</html>
