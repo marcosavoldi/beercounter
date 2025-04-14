@@ -1,0 +1,15 @@
+# Escludi il file di configurazione contenente API keys (non versionarlo)
+config.js
+
+# Escludi eventuali file di configurazione ambiente (se presenti)
+.env
+
+# File di log (eventuali file generati da npm o yarn)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Se utilizzi un tool di build, escludi la cartella dei moduli (non necessario per file statici)
+node_modules/
+
+# Aggiungi eventuali altre cartelle o file che non vuoi caricare su GitHub

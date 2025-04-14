@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>beercounter.it 🍻</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- HEADER con logo -->
+  <header class="site-header">
+    <img src="images/2.png" alt="Logo beercounter.it" class="logo">
+  </header>
+
+  <!-- HOME PAGE -->
+  <main class="home">
+    <h1>beercounter.it 🍺</h1>
+    <p>La birra non si dimentica. E neanche chi deve pagarla.</p>
+    <button id="login-btn" class="btn-primary">Accedi con Google</button>
+    <div class="note">
+      Nessuna registrazione necessaria<br>
+      Solo login con Google + un nickname personalizzato!
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <p>&copy; 2025 beercounter.it</p>
+  </footer>
+
+  <!-- Carica il file di configurazione contenente le API keys -->
+  <script src="config.js"></script>
+  <!-- Carica lo script di autenticazione, che utilizzerà window.firebaseConfig definito in config.js -->
+  <script type="module" src="script/auth.js"></script>
+  
+</body>
+</html>
