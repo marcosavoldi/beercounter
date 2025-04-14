@@ -31,6 +31,18 @@ function displayUserInfo(user) {
     : "Utente non loggato";
 }
 
+// Funzione per assicurarsi che il documento dell'utente esista in "users"
+async function ensureUserDocument(user) {
+  const userDocRef = doc(db, "users", user.uid);
+  const userDocSnap = await getDoc(userDocRef);
+  if (!userDocSnap.exists()) {
+    await setDoc(userDocRef, {
+      displayName: user.displayName || "",
+      email: user.email || ""
+    });
+  }
+}
+
 // Funzione per caricare i gruppi dell'utente loggato
 async function loadGroups() {
   const user = auth.currentUser;
@@ -72,7 +84,10 @@ async function loadGroups() {
       inviteBtn.style.marginTop = "10px";
 
       inviteBtn.addEventListener("click", () => {
-        const link = `${window.location.origin}/join.html?g=${data.groupId}`;
+        // Nota: se pubblichi su GitHub Pages con repository di tipo username.github.io/nome-repo,
+        // potresti dover usare un percorso relativo oppure concatenare il nome della repository.
+        // Per semplicità, qui usiamo un percorso relativo:
+        const link = `join.html?g=${data.groupId}`;
         navigator.clipboard.writeText(link).then(() => {
           inviteBtn.textContent = "✅ Link copiato!";
           setTimeout(() => {
@@ -88,9 +103,11 @@ async function loadGroups() {
       requestsTitle.style.marginTop = "16px";
       groupCard.appendChild(requestsTitle);
 
+      // Itera su tutti gli utenti della collection "users"
       const allUsersSnap = await getDocs(collection(db, "users"));
       for (const userDoc of allUsersSnap.docs) {
-        if (userDoc.id === user.uid) continue; // Salta se è l'utente corrente
+        // Salta il documento dell'utente corrente
+        if (userDoc.id === user.uid) continue;
 
         const pendingRef = doc(db, "users", userDoc.id, "groups", data.groupId);
         const pendingSnap = await getDoc(pendingRef);
@@ -222,9 +239,11 @@ const clearBtn = document.getElementById("clear-pending-btn");
 const fullResetBtn = document.getElementById("reset-everything-btn");
 
 // Listener unificato per il controllo dello stato di autenticazione
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   displayUserInfo(user);
   if (user) {
+    // Assicurati che il documento utente esista in "users"
+    await ensureUserDocument(user);
     if (!window.skipGroupLoad) loadGroups();
     if (devPanel) devPanel.style.display = "block";
   }
