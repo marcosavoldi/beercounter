@@ -4,53 +4,67 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Area del Gruppo</title>
-  <!-- File CSS globale -->
   <link rel="stylesheet" href="css/style.css">
+  <!-- Regole aggiuntive per il layout dei form in questa pagina -->
+  <style>
+    /* Classi per gruppi di form */
+    .form-group {
+      margin-top: 10px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .form-group input[type="radio"] {
+      margin-right: 5px;
+    }
+    /* Assicura che i pulsanti del form occupino tutta la larghezza della card */
+    #transaction-form button {
+      width: 100%;
+    }
+  </style>
 </head>
 <body>
   <header class="site-header">
-    <!-- Pulsante "Indietro" per tornare alla dashboard -->
-    <button id="back-btn" class="btn-vertical">← Indietro</button>
+    <button id="back-btn" class="btn-secondary btn-vertical">← Indietro</button>
     <h1>Area del Gruppo</h1>
   </header>
-
   <main>
-    <!-- Sezione per registrare la transazione -->
-    <section id="transaction-section">
+    <!-- Card per la registrazione della transazione -->
+    <div class="card-gruppo" style="margin: 20px auto; max-width: 600px;">
       <h2>Registra Transazione</h2>
-      <label for="acting-user">Seleziona chi esegue l'azione:</label>
-      <select id="acting-user"></select>
-      
-      <div id="transaction-type">
-         <label>
+      <form id="transaction-form">
+        <div class="form-group">
+          <label for="acting-user">Seleziona chi esegue l'azione:</label>
+          <select id="acting-user"></select>
+        </div>
+        <div class="form-group" id="transaction-type">
+          <label>
             <input type="radio" name="transType" value="deve" checked>
             Deve pagare una birra a
-         </label>
-         <label>
+          </label>
+          <label>
             <input type="radio" name="transType" value="ha">
             Ha pagato una birra a
-         </label>
-      </div>
-      
-      <div id="recipients-section">
-         <h3>Seleziona destinatari:</h3>
-         <div id="recipients-list"></div>
-      </div>
-      
-      <button id="confirm-transaction" class="btn-vertical">Conferma Transazione</button>
-    </section>
-
-    <!-- Sezione per lo storico delle transazioni -->
-    <section id="history-section">
-      <h2>Storico del gruppo</h2>
+          </label>
+        </div>
+        <div class="form-group" id="recipients-section">
+          <h3>Seleziona destinatari:</h3>
+          <div id="recipients-list"></div>
+        </div>
+        <button type="button" id="confirm-transaction" class="btn-primary btn-vertical">Conferma Transazione</button>
+      </form>
+    </div>
+    
+    <!-- Card per lo storico delle transazioni -->
+    <div class="card-gruppo" style="margin: 20px auto; max-width: 600px;">
+      <h2>Storico del Gruppo</h2>
       <div id="history-list"></div>
-    </section>
-
-    <!-- Pulsante "Aggiorna" -->
-    <button id="refresh-btn" class="btn-vertical">Aggiorna</button>
+      <button id="refresh-btn" class="btn-secondary btn-vertical">Aggiorna Storico</button>
+    </div>
   </main>
 
-  <!-- Caricamento della configurazione e degli script -->
+  <!-- Caricamento della configurazione e dello script -->
   <script src="config.js"></script>
   <script type="module" src="script/group.js"></script>
 </body>
