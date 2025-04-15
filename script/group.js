@@ -8,7 +8,8 @@ import {
   addDoc,
   query,
   orderBy,
-  getDocs
+  getDocs,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
 
@@ -26,9 +27,10 @@ if (!groupId) {
   window.location.href = "dashboard.html";
 }
 
-// Variabili globali per gestire l'utente loggato
+// Variabili globali per l'utente loggato nella pagina group
 let loggedInUserId = null;
 let currentUserIsAdmin = false;
+let groupData; // dati completi del gruppo
 
 // Riferimenti agli elementi del DOM
 const backBtn = document.getElementById("back-btn");
@@ -45,9 +47,10 @@ backBtn.addEventListener("click", () => {
   window.location.href = "dashboard.html";
 });
 
-let groupData;
-
-// Carica i dati del gruppo e aggiorna l'intestazione
+/* 
+  Funzione loadGroupData: Carica i dati del gruppo dalla collection "groups" 
+  e imposta la variabile currentUserIsAdmin in base alla membership dell'utente
+*/
 async function loadGroupData() {
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
@@ -58,12 +61,12 @@ async function loadGroupData() {
   }
   groupData = groupSnap.data();
   
-  // Aggiorna il nome del gruppo nell'header della pagina
+  // Aggiorna il nome del gruppo nell'header
   if (groupNameHeader) {
     groupNameHeader.textContent = groupData.name;
   }
   
-  // Assicura che ogni membro abbia il campo saldoBirre (inizialmente 0 se mancante)
+  // Imposta un default per saldoBirre se mancante per ogni membro
   groupData.members = (groupData.members || []).map(member => {
     if (member.saldoBirre === undefined) {
       member.saldoBirre = 0;
@@ -71,10 +74,11 @@ async function loadGroupData() {
     return member;
   });
   
-  // Imposta le variabili globali in base al membro corrispondente all'utente loggato
+  // Determina se l'utente loggato è admin nel gruppo, basandosi sul campo "role"
   const loggedInMember = groupData.members.find(m => m.uid === loggedInUserId);
   currentUserIsAdmin = loggedInMember && loggedInMember.role === "admin";
   
+  // Popola i controlli della pagina
   populateActingUserSelect();
   populateRecipients();
   loadHistory();
@@ -97,6 +101,11 @@ function populateRecipients() {
   recipientsListDiv.innerHTML = "";
   groupData.members.forEach(member => {
     const div = document.createElement("div");
+    div.style.display = "flex";
+    div.style.alignItems = "center";
+    div.style.gap = "8px";
+    div.style.marginBottom = "8px";
+    
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.value = member.uid;
@@ -124,17 +133,17 @@ async function loadHistory() {
   });
 }
 
-// Il pulsante "Aggiorna" ricarica la pagina
+// Pulsante "Aggiorna" per ricaricare la pagina
 refreshBtn.addEventListener("click", () => {
   window.location.reload();
 });
 
-// Gestione della conferma operazione
+// Gestione della conferma dell'operazione
 confirmBtn.addEventListener("click", async () => {
-  // Ottieni l'utente che esegue l'operazione dal menu a tendina
+  // Seleziona l'utente che esegue l'operazione dal menu a tendina
   const actingUserUid = actingUserSelect.value;
   
-  // Determina il tipo di operazione: "deve" (deve pagare) oppure "ha" (ha pagato)
+  // Seleziona il tipo di operazione: "deve" o "ha"
   let transType = "deve";
   transactionTypeRadios.forEach(radio => {
     if (radio.checked) {
@@ -150,7 +159,7 @@ confirmBtn.addEventListener("click", async () => {
       selectedRecipients.push(cb.value);
     }
   });
-  // Filtra eventuale selezione dell'utente stesso
+  // Filtra eventuale selezione dell'utente stesso (operazione su se stessi non ha senso)
   selectedRecipients = selectedRecipients.filter(uid => uid !== actingUserUid);
   if (selectedRecipients.length === 0) {
     alert("Seleziona almeno un destinatario diverso da te.");
@@ -161,7 +170,7 @@ confirmBtn.addEventListener("click", async () => {
   const timestamp = new Date();
   const formattedDate = timestamp.toLocaleString();
   
-  // Ottieni il nome dell'utente che esegue l'operazione (dalla tendina, anche se potrebbe non essere admin)
+  // Ottieni il nome dell'utente che esegue l'operazione
   const actingMember = groupData.members.find(m => m.uid === actingUserUid);
   const actingName = actingMember ? actingMember.name : "Sconosciuto";
   
@@ -170,7 +179,7 @@ confirmBtn.addEventListener("click", async () => {
     .filter(m => selectedRecipients.includes(m.uid))
     .map(m => m.name)
     .join(", ");
-    
+  
   let message = "";
   if (transType === "ha") {
     message = `${formattedDate}: ${actingName} ha pagato ${count} birre a ${recipientsNames}.`;
@@ -178,7 +187,7 @@ confirmBtn.addEventListener("click", async () => {
     message = `Nuovo debito! ${formattedDate}: ${actingName} ha registrato un debito di ${count} birre a ${recipientsNames}.`;
   }
   
-  // Se l'utente loggato è admin, processa immediatamente l'operazione, altrimenti crea una richiesta pending
+  // Se l'utente loggato è admin, processa l'operazione immediatamente; altrimenti crea una richiesta pending
   if (currentUserIsAdmin) {
     await processTransactionImmediate(actingUserUid, transType, count, message);
   } else {
@@ -186,7 +195,7 @@ confirmBtn.addEventListener("click", async () => {
   }
 });
 
-// Funzione per processare immediatamente l'operazione (per admin)
+// Funzione per processare immediatamente l'operazione (solo admin)
 async function processTransactionImmediate(actingUserUid, transType, count, message) {
   const newMembers = groupData.members.map(member => {
     if (member.uid === actingUserUid) {
@@ -198,7 +207,7 @@ async function processTransactionImmediate(actingUserUid, transType, count, mess
   const groupRef = doc(db, "groups", groupId);
   await updateDoc(groupRef, { members: newMembers });
   
-  // Aggiungi il record della transazione nello storico (subcollection "history")
+  // Aggiungi il record della transazione nello storico ("history" subcollection)
   const historyRef = collection(db, "groups", groupId, "history");
   await addDoc(historyRef, {
     message: message,
@@ -209,7 +218,7 @@ async function processTransactionImmediate(actingUserUid, transType, count, mess
   window.location.reload();
 }
 
-// Funzione per creare una richiesta pending (per non admin)
+// Funzione per creare una richiesta pending (per utenti non admin)
 async function processTransactionPending(actingUserUid, transType, recipients, count, message) {
   const pendingRef = collection(db, "groups", groupId, "pendingTransactions");
   await addDoc(pendingRef, {
@@ -225,10 +234,107 @@ async function processTransactionPending(actingUserUid, transType, recipients, c
   window.location.reload();
 }
 
-// Gestione dell'autenticazione e caricamento dei dati
+/* 
+  In group.js, per le operazioni "gestisci gruppo", 
+  qualora l'utente voglia visualizzare i dettagli (ad es. rimuovere membri, eliminare il gruppo),
+  tali opzioni devono comparire solo se l'utente è admin.
+  La funzione loadGroupDetails viene quindi modificata per non visualizzare i btn "Rimuovi" e "Elimina gruppo"
+  se currentUserIsAdmin è false.
+*/
+async function loadGroupDetails(groupId, container) {
+  container.innerHTML = "";
+  
+  const groupRef = doc(db, "groups", groupId);
+  const groupSnap = await getDoc(groupRef);
+  if (!groupSnap.exists()) {
+    container.innerHTML = "<p>Gruppo non trovato.</p>";
+    return;
+  }
+  
+  const groupDataDetails = groupSnap.data();
+  const members = groupDataDetails.members || [];
+  
+  // Crea una lista dei membri
+  const membersList = document.createElement("ul");
+  members.forEach(member => {
+    const li = document.createElement("li");
+    li.style.marginBottom = "6px";
+    li.textContent = `${member.name} (${member.uid})`;
+    
+    // Solo se l'utente loggato è admin, mostra il pulsante "Rimuovi" per i membri (escluso se stesso)
+    if (currentUserIsAdmin && member.uid !== loggedInUserId) {
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "Rimuovi";
+      removeBtn.className = "btn-small";
+      removeBtn.style.marginLeft = "10px";
+      removeBtn.addEventListener("click", async () => {
+        await removeMemberFromGroup(groupId, member.uid);
+        await loadGroupDetails(groupId, container);
+      });
+      li.appendChild(removeBtn);
+    }
+    membersList.appendChild(li);
+  });
+  
+  container.appendChild(membersList);
+  
+  // Se l'utente loggato è admin, mostra il pulsante per eliminare il gruppo
+  if (currentUserIsAdmin) {
+    const deleteGroupBtn = document.createElement("button");
+    deleteGroupBtn.textContent = "Elimina gruppo";
+    deleteGroupBtn.className = "btn-secondary";
+    deleteGroupBtn.style.display = "block";
+    deleteGroupBtn.style.marginTop = "10px";
+    deleteGroupBtn.addEventListener("click", async () => {
+      if (confirm("Sei sicuro di voler eliminare il gruppo?")) {
+        await deleteGroup(groupId);
+      }
+    });
+    container.appendChild(deleteGroupBtn);
+  }
+}
+
+// Funzione per rimuovere un membro dal gruppo (disponibile solo per admin)
+async function removeMemberFromGroup(groupId, memberUid) {
+  const groupRef = doc(db, "groups", groupId);
+  const groupSnap = await getDoc(groupRef);
+  if (groupSnap.exists()) {
+    const groupDataLocal = groupSnap.data();
+    const updatedMembers = groupDataLocal.members.filter(m => m.uid !== memberUid);
+    await updateDoc(groupRef, { members: updatedMembers });
+    // Rimuove anche la referenza nella subcollezione dell'utente
+    await deleteDoc(doc(db, "users", memberUid, "groups", groupId));
+    alert("Membro rimosso con successo.");
+    loadGroups();
+  }
+}
+
+// Funzione per eliminare un gruppo (disponibile solo per admin)
+async function deleteGroup(groupId) {
+  // Elimina il documento del gruppo dalla collection "groups"
+  await deleteDoc(doc(db, "groups", groupId));
+  
+  // Rimuove la membership di questo gruppo da tutti gli utenti
+  const usersSnap = await getDocs(collection(db, "users"));
+  for (const userDoc of usersSnap.docs) {
+    const membershipRef = doc(db, "users", userDoc.id, "groups", groupId);
+    const membershipSnap = await getDoc(membershipRef);
+    if (membershipSnap.exists()) {
+      await deleteDoc(membershipRef);
+    }
+  }
+  alert("Gruppo eliminato.");
+  loadGroups();
+}
+
+/* 
+  Funzioni per la creazione di un nuovo gruppo sono gestite in dashboard.js 
+  e non sono presenti qui. Questo file gestisce esclusivamente l'area gruppo.
+*/
+
+// Gestione dell'autenticazione
 onAuthStateChanged(auth, user => {
   if (user) {
-    // Imposta l'ID dell'utente loggato
     loggedInUserId = user.uid;
     loadGroupData();
   } else {
