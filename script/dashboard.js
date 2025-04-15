@@ -18,9 +18,13 @@ import {
 
 // Utilizza la configurazione Firebase definita in config.js
 const firebaseConfig = window.firebaseConfig;
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Variabile globale per tenere traccia dell'utente loggato
+let loggedInUserId = null;
 
 // Funzione per mostrare il nome utente
 function displayUserInfo(user) {
@@ -50,7 +54,7 @@ async function loadGroups() {
   const groupsList = document.getElementById("groups-list");
   groupsList.innerHTML = "";
 
-  // Carica i gruppi memorizzati nella subcollezione dell'utente
+  // Carica i gruppi dalla subcollezione dell'utente
   const groupsRef = collection(db, "users", user.uid, "groups");
   const querySnapshot = await getDocs(groupsRef);
 
@@ -95,7 +99,7 @@ async function loadGroups() {
       });
       groupCard.appendChild(inviteBtn);
 
-      // Verifica se l'utente è admin per questo gruppo
+      // Se l'utente è admin, aggiungi pulsanti di gestione
       if (data.status === "admin") {
         // Pulsante "Gestisci gruppo"
         const manageBtn = document.createElement("button");
@@ -104,14 +108,14 @@ async function loadGroups() {
         manageBtn.style.display = "block";
         manageBtn.style.marginTop = "10px";
         
-        // Contenitore per i dettagli del gruppo
+        // Contenitore per dettagli del gruppo (nascosto inizialmente)
         const detailsContainer = document.createElement("div");
         detailsContainer.className = "group-details";
         detailsContainer.style.display = "none";
         detailsContainer.style.borderTop = "1px dashed #ccc";
         detailsContainer.style.marginTop = "10px";
         detailsContainer.style.paddingTop = "10px";
-
+        
         manageBtn.addEventListener("click", async () => {
           if (detailsContainer.style.display === "block") {
             detailsContainer.style.display = "none";
@@ -124,68 +128,9 @@ async function loadGroups() {
         });
         groupCard.appendChild(manageBtn);
         groupCard.appendChild(detailsContainer);
-
-        // Sezione pending: Query pending transactions dalla subcollezione "pendingTransactions"
-        const requestsTitle = document.createElement("h4");
-        requestsTitle.textContent = "Richieste in attesa";
-        requestsTitle.style.display = "block";
-        requestsTitle.style.marginTop = "10px";
-        groupCard.appendChild(requestsTitle);
         
-        const pendingRef = collection(db, "groups", data.groupId, "pendingTransactions");
-        const pendingSnap = await getDocs(pendingRef);
-        pendingSnap.forEach(docPending => {
-          const pendingData = docPending.data();
-          if (pendingData.status === "pending") {
-            const requestRow = document.createElement("div");
-            requestRow.style.display = "block";
-            requestRow.style.marginTop = "6px";
-            
-            const requester = document.createElement("span");
-            requester.textContent = pendingData.requesterName || "Utente";
-            
-            const approveBtn = document.createElement("button");
-            approveBtn.textContent = "✅";
-            approveBtn.className = "btn-small";
-            approveBtn.style.marginLeft = "8px";
-            
-            const rejectBtn = document.createElement("button");
-            rejectBtn.textContent = "❌";
-            rejectBtn.className = "btn-small";
-            rejectBtn.style.marginLeft = "4px";
-            
-            approveBtn.addEventListener("click", async () => {
-              await updateDoc(docPending.ref, { status: "user" });
-              // Aggiorna il documento del gruppo aggiungendo il membro richiesto (se non già presente)
-              const groupRef = doc(db, "groups", data.groupId);
-              const groupSnap = await getDoc(groupRef);
-              if (groupSnap.exists()) {
-                const groupDataLocal = groupSnap.data();
-                const updatedMembers = [...(groupDataLocal.members || [])];
-                const alreadyPresent = updatedMembers.some((m) => m.uid === pendingData.actingUser);
-                if (!alreadyPresent) {
-                  updatedMembers.push({
-                    uid: pendingData.actingUser,
-                    role: "user",
-                    name: pendingData.requesterName || "Utente"
-                  });
-                  await updateDoc(groupRef, { members: updatedMembers });
-                }
-              }
-              loadGroups();
-            });
-            
-            rejectBtn.addEventListener("click", async () => {
-              await deleteDoc(docPending.ref);
-              loadGroups();
-            });
-            
-            requestRow.appendChild(requester);
-            requestRow.appendChild(approveBtn);
-            requestRow.appendChild(rejectBtn);
-            groupCard.appendChild(requestRow);
-          }
-        });
+        // Carica le richieste pending dalla subcollezione "pendingTransactions"
+        await loadPendingForGroup(data, groupCard);
       }
       
       // Pulsante "Accedi al gruppo" (visibile a tutti)
@@ -202,6 +147,125 @@ async function loadGroups() {
     
     groupsList.appendChild(groupCard);
   }
+}
+
+// Funzione per caricare le pending request per un gruppo (solo admin)
+async function loadPendingForGroup(data, groupCard) {
+  const pendingRef = collection(db, "groups", data.groupId, "pendingTransactions");
+  const pendingSnap = await getDocs(pendingRef);
+  
+  if (!pendingSnap.empty) {
+    const requestsTitle = document.createElement("h4");
+    requestsTitle.textContent = "Richieste in attesa";
+    requestsTitle.style.display = "block";
+    requestsTitle.style.marginTop = "10px";
+    groupCard.appendChild(requestsTitle);
+    
+    pendingSnap.forEach(docPending => {
+      const pendingData = docPending.data();
+      if (pendingData.status === "pending") {
+        const requestRow = document.createElement("div");
+        requestRow.style.display = "block";
+        requestRow.style.marginTop = "6px";
+        
+        // Mostra il nome del richiedente
+        const requesterSpan = document.createElement("span");
+        requesterSpan.textContent = pendingData.requesterName || "Richiedente sconosciuto";
+        requestRow.appendChild(requesterSpan);
+        
+        // Pulsante "Dettagli"
+        const detailsBtn = document.createElement("button");
+        detailsBtn.textContent = "🔍 Dettagli";
+        detailsBtn.className = "btn-small";
+        detailsBtn.style.marginLeft = "8px";
+        detailsBtn.addEventListener("click", () => {
+          showPendingRequestPopup(docPending);
+        });
+        requestRow.appendChild(detailsBtn);
+        
+        groupCard.appendChild(requestRow);
+      }
+    });
+  }
+}
+
+// Funzione per mostrare il popup dei dettagli della pending request
+function showPendingRequestPopup(docPending) {
+  const pendingData = docPending.data();
+  let description = "";
+  if (pendingData.transType === "ha") {
+    // Seconda variante per i pagamenti
+    description = `${pendingData.requesterName} ha richiesto di registrare il pagamento di ${pendingData.count} birre da parte di ${pendingData.actingUserName} verso ${pendingData.recipientsNames}.`;
+  } else {
+    // Variante per il debito
+    description = `${pendingData.requesterName} ha chiesto di aggiungere un debito di ${pendingData.count} birre a ${pendingData.recipientsNames}.`;
+  }
+  
+  // Creazione dell'overlay per il popup
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100%";
+  overlay.style.height = "100%";
+  overlay.style.backgroundColor = "rgba(0,0,0,0.5)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.zIndex = "9999";
+  
+  const popup = document.createElement("div");
+  popup.style.backgroundColor = "#fff";
+  popup.style.padding = "20px";
+  popup.style.borderRadius = "8px";
+  popup.style.maxWidth = "400px";
+  popup.style.textAlign = "center";
+  
+  const descElem = document.createElement("p");
+  descElem.textContent = description;
+  popup.appendChild(descElem);
+  
+  // Bottone "Approva"
+  const approveBtn = document.createElement("button");
+  approveBtn.textContent = "Approva";
+  approveBtn.className = "btn-small";
+  approveBtn.style.marginRight = "10px";
+  approveBtn.addEventListener("click", async () => {
+    await updateDoc(docPending.ref, { status: "user" });
+    // Aggiorna il gruppo: aggiungi il membro se non è già presente
+    const groupRef = doc(db, "groups", groupId);
+    const groupSnap = await getDoc(groupRef);
+    if (groupSnap.exists()) {
+      const groupDataLocal = groupSnap.data();
+      const updatedMembers = [...(groupDataLocal.members || [])];
+      const alreadyPresent = updatedMembers.some((m) => m.uid === pendingData.actingUser);
+      if (!alreadyPresent) {
+        updatedMembers.push({
+          uid: pendingData.actingUser,
+          role: "user",
+          name: pendingData.actingUserName || "Utente"
+        });
+        await updateDoc(groupRef, { members: updatedMembers });
+      }
+    }
+    document.body.removeChild(overlay);
+    loadGroups();
+  });
+  
+  // Bottone "Rifiuta"
+  const rejectBtn = document.createElement("button");
+  rejectBtn.textContent = "Rifiuta";
+  rejectBtn.className = "btn-small";
+  rejectBtn.addEventListener("click", async () => {
+    await deleteDoc(docPending.ref);
+    document.body.removeChild(overlay);
+    loadGroups();
+  });
+  
+  popup.appendChild(approveBtn);
+  popup.appendChild(rejectBtn);
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
 }
 
 // Funzione per caricare i dettagli di un gruppo e visualizzare la lista dei membri
@@ -224,8 +288,8 @@ async function loadGroupDetails(groupId, container) {
     const li = document.createElement("li");
     li.style.marginBottom = "6px";
     li.textContent = `${member.name} (${member.uid})`;
-    // Se l'utente loggato è admin, mostra il pulsante "Rimuovi" per i membri (tranne se stesso)
-    if (currentUserIsAdmin && member.uid !== auth.currentUser.uid) {
+    // Solo se l'utente loggato è admin, mostra il pulsante "Rimuovi" per i membri (escluso se stesso)
+    if (currentUserIsAdmin && member.uid !== loggedInUserId) {
       const removeBtn = document.createElement("button");
       removeBtn.textContent = "Rimuovi";
       removeBtn.className = "btn-small";
@@ -241,7 +305,7 @@ async function loadGroupDetails(groupId, container) {
   
   container.appendChild(membersList);
   
-  // Se l'utente è admin, mostra il pulsante per eliminare il gruppo
+  // Se l'utente loggato è admin, mostra il pulsante per eliminare il gruppo
   if (currentUserIsAdmin) {
     const deleteGroupBtn = document.createElement("button");
     deleteGroupBtn.textContent = "Elimina gruppo";
@@ -257,7 +321,7 @@ async function loadGroupDetails(groupId, container) {
   }
 }
 
-// Funzione per rimuovere un membro dal gruppo (disponibile solo per admin)
+// Funzione per rimuovere un membro dal gruppo (solo per admin)
 async function removeMemberFromGroup(groupId, memberUid) {
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
@@ -265,18 +329,16 @@ async function removeMemberFromGroup(groupId, memberUid) {
     const groupDataLocal = groupSnap.data();
     const updatedMembers = groupDataLocal.members.filter(m => m.uid !== memberUid);
     await updateDoc(groupRef, { members: updatedMembers });
-    // Rimuove anche la referenza nella subcollezione dell'utente
     await deleteDoc(doc(db, "users", memberUid, "groups", groupId));
     alert("Membro rimosso con successo.");
     loadGroups();
   }
 }
 
-// Funzione per eliminare un gruppo (disponibile solo per admin)
+// Funzione per eliminare un gruppo (solo per admin)
 async function deleteGroup(groupId) {
   await deleteDoc(doc(db, "groups", groupId));
   
-  // Rimuove la membership di questo gruppo da tutti gli utenti
   const usersSnap = await getDocs(collection(db, "users"));
   for (const userDoc of usersSnap.docs) {
     const membershipRef = doc(db, "users", userDoc.id, "groups", groupId);
@@ -289,10 +351,9 @@ async function deleteGroup(groupId) {
   loadGroups();
 }
 
-// Listener per il pulsante "Crea un nuovo gruppo"
+// Listener per la creazione di un nuovo gruppo (gestito in dashboard)
 const createGroupBtn = document.getElementById("create-group-btn");
 const newGroupForm = document.getElementById("new-group-form");
-
 if (createGroupBtn && newGroupForm) {
   createGroupBtn.addEventListener("click", () => {
     newGroupForm.style.display =
@@ -302,14 +363,12 @@ if (createGroupBtn && newGroupForm) {
   });
 }
 
-// Creazione di un nuovo gruppo
 const submitGroupBtn = document.getElementById("submit-group-btn");
 if (submitGroupBtn) {
   submitGroupBtn.addEventListener("click", async () => {
     const user = auth.currentUser;
     const groupNameInput = document.getElementById("group-name-input");
     const groupName = groupNameInput.value.trim();
-
     if (!groupName) {
       alert("Inserisci un nome per il gruppo.");
       return;
@@ -322,13 +381,11 @@ if (submitGroupBtn) {
         createdAt: new Date(),
         members: [{ uid: user.uid, role: "admin", name: user.displayName }]
       });
-
       await setDoc(doc(db, "users", user.uid, "groups", newGroupRef.id), {
         name: groupName,
         status: "admin",
         groupId: newGroupRef.id
       });
-
       groupNameInput.value = "";
       newGroupForm.style.display = "none";
       loadGroups();
@@ -340,7 +397,6 @@ if (submitGroupBtn) {
   });
 }
 
-// Logout
 const logoutBtn = document.getElementById("logout-btn");
 if (logoutBtn) {
   logoutBtn.addEventListener("click", () => {
@@ -350,28 +406,24 @@ if (logoutBtn) {
   });
 }
 
-// Elementi del pannello di sviluppo
 const devPanel = document.getElementById("dev-panel");
 const clearBtn = document.getElementById("clear-pending-btn");
 const fullResetBtn = document.getElementById("reset-everything-btn");
 
-// Listener per il controllo dello stato di autenticazione
 onAuthStateChanged(auth, async (user) => {
   displayUserInfo(user);
   if (user) {
+    loggedInUserId = user.uid; // ASSICURA DI SALVARE L'UID QUI
     await ensureUserDocument(user);
     if (!window.skipGroupLoad) loadGroups();
     if (devPanel) devPanel.style.display = "block";
   }
 });
 
-// Pulisci richieste pending
 if (clearBtn) {
   clearBtn.addEventListener("click", async () => {
     if (!confirm("Sicuro di voler eliminare solo le richieste pending?")) return;
-
     let count = 0;
-    // Ora query la subcollezione "pendingTransactions" in ogni gruppo dell'utente admin
     const groupsRef = collection(db, "users", auth.currentUser.uid, "groups");
     const groupsSnap = await getDocs(groupsRef);
     for (const groupDoc of groupsSnap.docs) {
@@ -379,7 +431,7 @@ if (clearBtn) {
       if (data.status === "admin" && data.groupId) {
         const pendingRef = collection(db, "groups", data.groupId, "pendingTransactions");
         const pendingSnap = await getDocs(pendingRef);
-        pendingSnap.forEach(async docPending => {
+        pendingSnap.forEach(async (docPending) => {
           if (docPending.data().status === "pending") {
             await deleteDoc(docPending.ref);
             count++;
@@ -392,20 +444,16 @@ if (clearBtn) {
   });
 }
 
-// Reset totale del DB
 if (fullResetBtn) {
   fullResetBtn.addEventListener("click", async () => {
     if (!confirm("⚠️ Sicuro di voler ELIMINARE TUTTO dal database?")) return;
-
     let gruppiEliminati = 0;
     let riferimentiUtente = 0;
-
     const groupsSnap = await getDocs(collection(db, "groups"));
     for (const group of groupsSnap.docs) {
       await deleteDoc(doc(db, "groups", group.id));
       gruppiEliminati++;
     }
-
     const usersSnap = await getDocs(collection(db, "users"));
     for (const user of usersSnap.docs) {
       const userId = user.id;
@@ -416,7 +464,6 @@ if (fullResetBtn) {
         riferimentiUtente++;
       }
     }
-
     alert(`✅ Reset completato: eliminati ${gruppiEliminati} gruppi e ${riferimentiUtente} riferimenti utente.`);
     signOut(auth).then(() => location.reload());
   });
