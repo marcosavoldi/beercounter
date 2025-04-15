@@ -60,16 +60,13 @@ async function loadGroups() {
     // Crea la card del gruppo
     const groupCard = document.createElement("div");
     groupCard.className = "card-gruppo";
-    // Disposizione verticale
     groupCard.style.display = "block";
     groupCard.style.marginBottom = "20px";
     
-    // Titolo del gruppo
     const title = document.createElement("h3");
     title.textContent = data.name;
     groupCard.appendChild(title);
     
-    // Mostra il ruolo (per esempio, "Sei l’amministratore" o "Sei un membro")
     const role = document.createElement("p");
     role.textContent =
       data.status === "admin"
@@ -79,7 +76,6 @@ async function loadGroups() {
         : "Sei un membro";
     groupCard.appendChild(role);
 
-    // Se il gruppo è stato creato (ha groupId)
     if (data.groupId) {
       // Bottone "Copia link invito" (visibile a tutti)
       const inviteBtn = document.createElement("button");
@@ -88,7 +84,6 @@ async function loadGroups() {
       inviteBtn.style.display = "block";
       inviteBtn.style.marginTop = "10px";
       inviteBtn.addEventListener("click", () => {
-        // Costruisce un URL completo basato sul baseURL corrente
         const baseUrl = window.location.href.replace(/\/[^\/]*$/, "/");
         const link = `${baseUrl}join.html?g=${data.groupId}`;
         navigator.clipboard.writeText(link).then(() => {
@@ -100,23 +95,23 @@ async function loadGroups() {
       });
       groupCard.appendChild(inviteBtn);
 
-      // Se l'utente è admin (cioè nel documento della membership in "users" lo status è "admin")
+      // Verifica se l'utente è admin per questo gruppo
       if (data.status === "admin") {
-        // Pulsante "Gestisci gruppo" e sezioni aggiuntive
+        // Pulsante "Gestisci gruppo"
         const manageBtn = document.createElement("button");
         manageBtn.textContent = "Gestisci gruppo";
         manageBtn.className = "btn-secondary";
         manageBtn.style.display = "block";
         manageBtn.style.marginTop = "10px";
         
-        // Contenitore per i dettagli (per rimuovere membri ed eliminare gruppo)
+        // Contenitore per i dettagli del gruppo
         const detailsContainer = document.createElement("div");
         detailsContainer.className = "group-details";
         detailsContainer.style.display = "none";
         detailsContainer.style.borderTop = "1px dashed #ccc";
         detailsContainer.style.marginTop = "10px";
         detailsContainer.style.paddingTop = "10px";
-    
+
         manageBtn.addEventListener("click", async () => {
           if (detailsContainer.style.display === "block") {
             detailsContainer.style.display = "none";
@@ -129,41 +124,25 @@ async function loadGroups() {
         });
         groupCard.appendChild(manageBtn);
         groupCard.appendChild(detailsContainer);
-      }
-      
-      // Pulsante "Accedi al gruppo" (visibile a tutti)
-      const accessBtn = document.createElement("button");
-      accessBtn.textContent = "Accedi al gruppo";
-      accessBtn.className = "btn-primary";
-      accessBtn.style.display = "block";
-      accessBtn.style.marginTop = "10px";
-      accessBtn.addEventListener("click", () => {
-        window.location.href = `group.html?g=${data.groupId}`;
-      });
-      groupCard.appendChild(accessBtn);
-      
-      // Se l'utente è admin, mostra anche le richieste pending
-      if (data.status === "admin") {
+
+        // Sezione pending: Query pending transactions dalla subcollezione "pendingTransactions"
         const requestsTitle = document.createElement("h4");
         requestsTitle.textContent = "Richieste in attesa";
         requestsTitle.style.display = "block";
         requestsTitle.style.marginTop = "10px";
         groupCard.appendChild(requestsTitle);
-    
-        // Itera su tutti gli utenti per trovare richieste pending relative a questo gruppo
-        const allUsersSnap = await getDocs(collection(db, "users"));
-        for (const userDoc of allUsersSnap.docs) {
-          if (userDoc.id === user.uid) continue;
-          const pendingRef = doc(db, "users", userDoc.id, "groups", data.groupId);
-          const pendingSnap = await getDoc(pendingRef);
-          if (pendingSnap.exists() && pendingSnap.data().status === "pending") {
-            const richiesta = pendingSnap.data();
+        
+        const pendingRef = collection(db, "groups", data.groupId, "pendingTransactions");
+        const pendingSnap = await getDocs(pendingRef);
+        pendingSnap.forEach(docPending => {
+          const pendingData = docPending.data();
+          if (pendingData.status === "pending") {
             const requestRow = document.createElement("div");
             requestRow.style.display = "block";
             requestRow.style.marginTop = "6px";
             
             const requester = document.createElement("span");
-            requester.textContent = richiesta.requesterName || "Utente";
+            requester.textContent = pendingData.requesterName || "Utente";
             
             const approveBtn = document.createElement("button");
             approveBtn.textContent = "✅";
@@ -176,18 +155,19 @@ async function loadGroups() {
             rejectBtn.style.marginLeft = "4px";
             
             approveBtn.addEventListener("click", async () => {
-              await updateDoc(pendingRef, { status: "user" });
+              await updateDoc(docPending.ref, { status: "user" });
+              // Aggiorna il documento del gruppo aggiungendo il membro richiesto (se non già presente)
               const groupRef = doc(db, "groups", data.groupId);
               const groupSnap = await getDoc(groupRef);
               if (groupSnap.exists()) {
                 const groupDataLocal = groupSnap.data();
                 const updatedMembers = [...(groupDataLocal.members || [])];
-                const alreadyPresent = updatedMembers.some((m) => m.uid === userDoc.id);
+                const alreadyPresent = updatedMembers.some((m) => m.uid === pendingData.actingUser);
                 if (!alreadyPresent) {
                   updatedMembers.push({
-                    uid: userDoc.id,
+                    uid: pendingData.actingUser,
                     role: "user",
-                    name: richiesta.requesterName || "utente"
+                    name: pendingData.requesterName || "Utente"
                   });
                   await updateDoc(groupRef, { members: updatedMembers });
                 }
@@ -196,7 +176,7 @@ async function loadGroups() {
             });
             
             rejectBtn.addEventListener("click", async () => {
-              await deleteDoc(pendingRef);
+              await deleteDoc(docPending.ref);
               loadGroups();
             });
             
@@ -205,8 +185,19 @@ async function loadGroups() {
             requestRow.appendChild(rejectBtn);
             groupCard.appendChild(requestRow);
           }
-        }
+        });
       }
+      
+      // Pulsante "Accedi al gruppo" (visibile a tutti)
+      const accessBtn = document.createElement("button");
+      accessBtn.textContent = "Accedi al gruppo";
+      accessBtn.className = "btn-primary";
+      accessBtn.style.display = "block";
+      accessBtn.style.marginTop = "10px";
+      accessBtn.addEventListener("click", () => {
+        window.location.href = `group.html?g=${data.groupId}`;
+      });
+      groupCard.appendChild(accessBtn);
     }
     
     groupsList.appendChild(groupCard);
@@ -233,8 +224,8 @@ async function loadGroupDetails(groupId, container) {
     const li = document.createElement("li");
     li.style.marginBottom = "6px";
     li.textContent = `${member.name} (${member.uid})`;
-    // Solo se l'utente loggato è admin, mostra il pulsante "Rimuovi" per i membri (escluso se stesso)
-    if (currentUserIsAdmin && member.uid !== loggedInUserId) {
+    // Se l'utente loggato è admin, mostra il pulsante "Rimuovi" per i membri (tranne se stesso)
+    if (currentUserIsAdmin && member.uid !== auth.currentUser.uid) {
       const removeBtn = document.createElement("button");
       removeBtn.textContent = "Rimuovi";
       removeBtn.className = "btn-small";
@@ -250,7 +241,7 @@ async function loadGroupDetails(groupId, container) {
   
   container.appendChild(membersList);
   
-  // Se l'utente loggato è admin, mostra il pulsante per eliminare il gruppo
+  // Se l'utente è admin, mostra il pulsante per eliminare il gruppo
   if (currentUserIsAdmin) {
     const deleteGroupBtn = document.createElement("button");
     deleteGroupBtn.textContent = "Elimina gruppo";
@@ -283,7 +274,6 @@ async function removeMemberFromGroup(groupId, memberUid) {
 
 // Funzione per eliminare un gruppo (disponibile solo per admin)
 async function deleteGroup(groupId) {
-  // Elimina il documento del gruppo dalla collection "groups"
   await deleteDoc(doc(db, "groups", groupId));
   
   // Rimuove la membership di questo gruppo da tutti gli utenti
@@ -326,7 +316,6 @@ if (submitGroupBtn) {
     }
     if (!user) return;
     try {
-      // Crea il gruppo
       const newGroupRef = await addDoc(collection(db, "groups"), {
         name: groupName,
         createdBy: user.uid,
@@ -334,7 +323,6 @@ if (submitGroupBtn) {
         members: [{ uid: user.uid, role: "admin", name: user.displayName }]
       });
 
-      // Aggiunge il gruppo nella subcollezione dell'utente
       await setDoc(doc(db, "users", user.uid, "groups", newGroupRef.id), {
         name: groupName,
         status: "admin",
@@ -367,11 +355,10 @@ const devPanel = document.getElementById("dev-panel");
 const clearBtn = document.getElementById("clear-pending-btn");
 const fullResetBtn = document.getElementById("reset-everything-btn");
 
-// Listener unificato per il controllo dello stato di autenticazione
+// Listener per il controllo dello stato di autenticazione
 onAuthStateChanged(auth, async (user) => {
   displayUserInfo(user);
   if (user) {
-    // Assicura l'esistenza del documento dell'utente in "users"
     await ensureUserDocument(user);
     if (!window.skipGroupLoad) loadGroups();
     if (devPanel) devPanel.style.display = "block";
@@ -384,16 +371,20 @@ if (clearBtn) {
     if (!confirm("Sicuro di voler eliminare solo le richieste pending?")) return;
 
     let count = 0;
-    const usersSnap = await getDocs(collection(db, "users"));
-    for (const userDoc of usersSnap.docs) {
-      const userId = userDoc.id;
-      const userGroupsRef = collection(db, "users", userId, "groups");
-      const groupDocs = await getDocs(userGroupsRef);
-      for (const group of groupDocs.docs) {
-        if (group.data().status === "pending") {
-          await deleteDoc(doc(db, "users", userId, "groups", group.id));
-          count++;
-        }
+    // Ora query la subcollezione "pendingTransactions" in ogni gruppo dell'utente admin
+    const groupsRef = collection(db, "users", auth.currentUser.uid, "groups");
+    const groupsSnap = await getDocs(groupsRef);
+    for (const groupDoc of groupsSnap.docs) {
+      const data = groupDoc.data();
+      if (data.status === "admin" && data.groupId) {
+        const pendingRef = collection(db, "groups", data.groupId, "pendingTransactions");
+        const pendingSnap = await getDocs(pendingRef);
+        pendingSnap.forEach(async docPending => {
+          if (docPending.data().status === "pending") {
+            await deleteDoc(docPending.ref);
+            count++;
+          }
+        });
       }
     }
     alert(`✅ Eliminati ${count} pending request.`);
