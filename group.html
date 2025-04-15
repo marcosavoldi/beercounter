@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Area del Gruppo</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Piccoli aggiustamenti per disporre gli elementi in verticale */
+    #transaction-section, #history-section {
+      margin: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
+    #transaction-section label,
+    #transaction-section select,
+    #transaction-section div,
+    #transaction-section button {
+      display: block;
+      margin-top: 10px;
+    }
+    #recipients-list > div {
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <button id="back-btn">← Indietro</button>
+    <h1>Area del Gruppo</h1>
+  </header>
+
+  <main>
+    <!-- Sezione per registrare la transazione -->
+    <section id="transaction-section">
+      <h2>Registra Transazione</h2>
+      <label for="acting-user">Seleziona chi esegue l'azione:</label>
+      <select id="acting-user"></select>
+      
+      <div id="transaction-type">
+         <label>
+            <input type="radio" name="transType" value="deve" checked>
+            Deve pagare una birra a
+         </label>
+         <label>
+            <input type="radio" name="transType" value="ha">
+            Ha pagato una birra a
+         </label>
+      </div>
+      
+      <div id="recipients-section">
+         <h3>Seleziona destinatari:</h3>
+         <div id="recipients-list"></div>
+      </div>
+      
+      <button id="confirm-transaction">Conferma Transazione</button>
+    </section>
+
+    <!-- Sezione per lo storico delle transazioni -->
+    <section id="history-section">
+      <h2>Storico del gruppo</h2>
+      <div id="history-list"></div>
+    </section>
+
+    <button id="refresh-btn">Aggiorna</button>
+  </main>
+
+  <!-- Carica il file di configurazione e il nuovo script -->
+  <script src="config.js"></script>
+  <script type="module" src="script/group.js"></script>
+</body>
+</html>
