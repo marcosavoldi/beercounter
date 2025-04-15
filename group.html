@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Area del Gruppo</title>
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Regole specifiche per il form nella pagina group */
+    .form-group {
+      margin-top: 10px;
+    }
+    /* Per "A chi??" le checkbox e il nome verranno allineati in linea */
+    #recipients-list > div {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+  </style>
 </head>
 <body>
   <header class="site-header">
@@ -20,7 +33,7 @@
       <h2>Aggiungi / rimuovi birre</h2>
       <form id="transaction-form">
         <div class="form-group">
-          <label for="acting-user">Chi??</label>
+          <h3>Chi??</h3>
           <select id="acting-user"></select>
         </div>
         <div class="form-group" id="transaction-type">

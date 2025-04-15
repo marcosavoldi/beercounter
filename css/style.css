@@ -70,6 +70,14 @@ main {
   height: auto;
 }
 
+#acting-user {
+  width: 100%;
+  font-size: 1rem;       /* aumenta la dimensione del testo */
+  padding: 10px;         /* padding interno per renderla più spaziosa */
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
 /* ===== FOOTER ===== */
 .site-footer {
   text-align: center;
