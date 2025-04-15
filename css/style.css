@@ -41,12 +41,28 @@ main {
 /* ===== HEADER ===== */
 .site-header {
   display: flex;
-  justify-content: flex-start;
   align-items: center;
   padding: 16px;
   background-color: var(--color-secondary);
   border-bottom: 4px solid var(--color-primary);
   width: 100%;
+}
+
+/* Stili specifici per la header della pagina group.html */
+#back-btn {
+  font-size: 0.8rem;      /* Font più piccolo */
+  padding: 4px 8px;       /* Ridotto padding */
+  margin-right: 8px;      /* Margine a destra più contenuto */
+  cursor: pointer;
+}
+
+#group-name-header {
+  flex-grow: 1;           /* Occupa lo spazio libero */
+  text-align: left;       /* Allineato a sinistra */
+  font-size: 1.8rem;      /* Testo più grande per evidenziare il nome */
+  white-space: nowrap;    /* Evita a capo */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .logo {
@@ -321,8 +337,8 @@ main {
   border-top: 2px dashed var(--color-accent);
 }
 
-/* ====== GROUP PAGE STYLES ====== */
-/* Stili specifici per la pagina group.html integrati in questo file */
+/* ====== GROUP PAGE STYLES (Integrati in style.css) ====== */
+/* Regole specifiche per la pagina group.html (area del gruppo) */
 
 #transaction-section,
 #history-section {
@@ -356,11 +372,6 @@ main {
 }
 
 /* Stile per il pulsante "Indietro" nella pagina group.html */
-#back-btn {
-  font-size: 1rem;
-  padding: 8px 16px;
-  margin-right: 16px;
-  cursor: pointer;
-}
+/* (già definito sopra come #back-btn) */
 
 /* Altre regole specifiche per la pagina group.html possono essere aggiunte qui */
