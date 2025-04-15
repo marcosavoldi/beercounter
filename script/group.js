@@ -26,6 +26,10 @@ if (!groupId) {
   window.location.href = "dashboard.html";
 }
 
+// Variabili globali per gestire l'utente loggato
+let loggedInUserId = null;
+let currentUserIsAdmin = false;
+
 // Riferimenti agli elementi del DOM
 const backBtn = document.getElementById("back-btn");
 const groupNameHeader = document.getElementById("group-name-header");
@@ -66,6 +70,10 @@ async function loadGroupData() {
     }
     return member;
   });
+  
+  // Imposta le variabili globali in base al membro corrispondente all'utente loggato
+  const loggedInMember = groupData.members.find(m => m.uid === loggedInUserId);
+  currentUserIsAdmin = loggedInMember && loggedInMember.role === "admin";
   
   populateActingUserSelect();
   populateRecipients();
@@ -123,7 +131,7 @@ refreshBtn.addEventListener("click", () => {
 
 // Gestione della conferma operazione
 confirmBtn.addEventListener("click", async () => {
-  // L'utente che esegue l'azione (dal menu a tendina)
+  // Ottieni l'utente che esegue l'operazione dal menu a tendina
   const actingUserUid = actingUserSelect.value;
   
   // Determina il tipo di operazione: "deve" (deve pagare) oppure "ha" (ha pagato)
@@ -142,7 +150,7 @@ confirmBtn.addEventListener("click", async () => {
       selectedRecipients.push(cb.value);
     }
   });
-  // Filtra l'eventuale selezione dell'utente stesso (non ha senso pagare se stesso)
+  // Filtra eventuale selezione dell'utente stesso
   selectedRecipients = selectedRecipients.filter(uid => uid !== actingUserUid);
   if (selectedRecipients.length === 0) {
     alert("Seleziona almeno un destinatario diverso da te.");
@@ -153,7 +161,7 @@ confirmBtn.addEventListener("click", async () => {
   const timestamp = new Date();
   const formattedDate = timestamp.toLocaleString();
   
-  // Ottieni il nome dell'utente che esegue l'operazione
+  // Ottieni il nome dell'utente che esegue l'operazione (dalla tendina, anche se potrebbe non essere admin)
   const actingMember = groupData.members.find(m => m.uid === actingUserUid);
   const actingName = actingMember ? actingMember.name : "Sconosciuto";
   
@@ -170,9 +178,8 @@ confirmBtn.addEventListener("click", async () => {
     message = `Nuovo debito! ${formattedDate}: ${actingName} ha registrato un debito di ${count} birre a ${recipientsNames}.`;
   }
   
-  // Se l'utente che esegue l'operazione è admin, processa la transazione immediatamente;
-  // altrimenti crea una richiesta pending
-  if (actingMember && actingMember.role === "admin") {
+  // Se l'utente loggato è admin, processa immediatamente l'operazione, altrimenti crea una richiesta pending
+  if (currentUserIsAdmin) {
     await processTransactionImmediate(actingUserUid, transType, count, message);
   } else {
     await processTransactionPending(actingUserUid, transType, selectedRecipients, count, message);
@@ -218,8 +225,11 @@ async function processTransactionPending(actingUserUid, transType, recipients, c
   window.location.reload();
 }
 
+// Gestione dell'autenticazione e caricamento dei dati
 onAuthStateChanged(auth, user => {
   if (user) {
+    // Imposta l'ID dell'utente loggato
+    loggedInUserId = user.uid;
     loadGroupData();
   } else {
     alert("Devi essere autenticato.");
