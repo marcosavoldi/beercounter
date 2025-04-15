@@ -13,6 +13,16 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
 
+//definisco funzione
+function displayUserInfo(user) {
+  // Se la pagina group.html contiene un elemento (per esempio, con id "user-name")
+  // puoi adattare questo codice. Se non c'è, puoi lasciarlo vuoto o fare un log.
+  const userNameElem = document.getElementById("user-name");
+  if (userNameElem) {
+    userNameElem.textContent = user ? `Benvenuto, ${user.displayName}` : "Utente non loggato";
+  }
+}
+
 // Utilizza la configurazione definita in config.js
 const firebaseConfig = window.firebaseConfig;
 const app = initializeApp(firebaseConfig);
