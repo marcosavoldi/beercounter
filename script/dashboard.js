@@ -84,10 +84,10 @@ async function loadGroups() {
       inviteBtn.style.marginTop = "10px";
 
       inviteBtn.addEventListener("click", () => {
-        // Nota: se pubblichi su GitHub Pages con repository di tipo username.github.io/nome-repo,
-        // potresti dover usare un percorso relativo oppure concatenare il nome della repository.
-        // Per semplicità, qui usiamo un percorso relativo:
-        const link = `join.html?g=${data.groupId}`;
+        // Rimuove l'ultima parte del percorso per ottenere la directory base
+        const baseUrl = window.location.href.replace(/\/[^\/]*$/, "/");
+        const link = `${baseUrl}join.html?g=${data.groupId}`;
+        
         navigator.clipboard.writeText(link).then(() => {
           inviteBtn.textContent = "✅ Link copiato!";
           setTimeout(() => {
