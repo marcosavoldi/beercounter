@@ -4,29 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Area del Gruppo</title>
+  <!-- File CSS globale -->
   <link rel="stylesheet" href="css/style.css">
-  <style>
-    /* Piccoli aggiustamenti per disporre gli elementi in verticale */
-    #transaction-section, #history-section {
-      margin: 20px;
-      padding: 10px;
-      border: 1px solid #ccc;
-    }
-    #transaction-section label,
-    #transaction-section select,
-    #transaction-section div,
-    #transaction-section button {
-      display: block;
-      margin-top: 10px;
-    }
-    #recipients-list > div {
-      margin-bottom: 5px;
-    }
-  </style>
+  <!-- File CSS dedicato alla pagina Group (opzionale) -->
+  <link rel="stylesheet" href="css/group.css">
 </head>
 <body>
   <header class="site-header">
-    <button id="back-btn">← Indietro</button>
+    <!-- Pulsante "Indietro" per tornare alla dashboard -->
+    <button id="back-btn" class="btn-vertical">← Indietro</button>
     <h1>Area del Gruppo</h1>
   </header>
 
@@ -53,7 +39,7 @@
          <div id="recipients-list"></div>
       </div>
       
-      <button id="confirm-transaction">Conferma Transazione</button>
+      <button id="confirm-transaction" class="btn-vertical">Conferma Transazione</button>
     </section>
 
     <!-- Sezione per lo storico delle transazioni -->
@@ -62,10 +48,11 @@
       <div id="history-list"></div>
     </section>
 
-    <button id="refresh-btn">Aggiorna</button>
+    <!-- Pulsante "Aggiorna" -->
+    <button id="refresh-btn" class="btn-vertical">Aggiorna</button>
   </main>
 
-  <!-- Carica il file di configurazione e il nuovo script -->
+  <!-- Caricamento della configurazione e degli script -->
   <script src="config.js"></script>
   <script type="module" src="script/group.js"></script>
 </body>
