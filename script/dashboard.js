@@ -61,11 +61,14 @@ async function loadGroups() {
     // Crea la card del gruppo
     const groupCard = document.createElement("div");
     groupCard.className = "card-gruppo";
-    groupCard.setAttribute("data-ruolo", data.status);
-
+    // Forza la disposizione verticale dei pulsanti
+    groupCard.style.display = "block";
+    groupCard.style.marginBottom = "20px";
+    
     const title = document.createElement("h3");
     title.textContent = data.name;
-
+    groupCard.appendChild(title);
+    
     const role = document.createElement("p");
     role.textContent =
       data.status === "admin"
@@ -73,18 +76,16 @@ async function loadGroups() {
         : data.status === "pending"
         ? "Richiesta in attesa"
         : "Sei un membro";
-
-    groupCard.appendChild(title);
     groupCard.appendChild(role);
 
-    // Se l'utente è admin e il gruppo esiste, aggiungi opzioni extra
-    if (data.status === "admin" && data.groupId) {
+    // Se il gruppo è stato creato con un groupId (quindi dalla nuova logica)
+    if (data.groupId) {
       // Bottone per copiare il link d'invito
       const inviteBtn = document.createElement("button");
       inviteBtn.textContent = "Copia link invito";
       inviteBtn.className = "btn-secondary";
+      inviteBtn.style.display = "block";
       inviteBtn.style.marginTop = "10px";
-
       inviteBtn.addEventListener("click", () => {
         // Costruisci un URL completo: rimuove l'ultima parte del percorso per ottenere il baseURL
         const baseUrl = window.location.href.replace(/\/[^\/]*$/, "/");
@@ -102,6 +103,7 @@ async function loadGroups() {
       const manageBtn = document.createElement("button");
       manageBtn.textContent = "Gestisci gruppo";
       manageBtn.className = "btn-secondary";
+      manageBtn.style.display = "block";
       manageBtn.style.marginTop = "10px";
       
       // Contenitore per i dettagli del gruppo (nascosto inizialmente)
@@ -125,38 +127,49 @@ async function loadGroups() {
       groupCard.appendChild(manageBtn);
       groupCard.appendChild(detailsContainer);
 
-      // Gestione delle richieste pending (funzionalità già implementata)
+      // Pulsante "Accedi al gruppo"
+      const accessBtn = document.createElement("button");
+      accessBtn.textContent = "Accedi al gruppo";
+      accessBtn.className = "btn-primary";
+      accessBtn.style.display = "block";
+      accessBtn.style.marginTop = "10px";
+      accessBtn.addEventListener("click", () => {
+        window.location.href = `group.html?g=${data.groupId}`;
+      });
+      groupCard.appendChild(accessBtn);
+
+      // Gestione delle richieste pending (già implementata)
       const requestsTitle = document.createElement("h4");
       requestsTitle.textContent = "Richieste in attesa";
-      requestsTitle.style.marginTop = "16px";
+      requestsTitle.style.display = "block";
+      requestsTitle.style.marginTop = "10px";
       groupCard.appendChild(requestsTitle);
 
       // Itera su tutti gli utenti per trovare richieste pending relative a questo gruppo
       const allUsersSnap = await getDocs(collection(db, "users"));
       for (const userDoc of allUsersSnap.docs) {
         if (userDoc.id === user.uid) continue;
-
         const pendingRef = doc(db, "users", userDoc.id, "groups", data.groupId);
         const pendingSnap = await getDoc(pendingRef);
-
         if (pendingSnap.exists() && pendingSnap.data().status === "pending") {
           const richiesta = pendingSnap.data();
           const requestRow = document.createElement("div");
+          requestRow.style.display = "block";
           requestRow.style.marginTop = "6px";
-
+          
           const requester = document.createElement("span");
           requester.textContent = richiesta.requesterName || "Utente";
-
+          
           const approveBtn = document.createElement("button");
           approveBtn.textContent = "✅";
           approveBtn.className = "btn-small";
           approveBtn.style.marginLeft = "8px";
-
+          
           const rejectBtn = document.createElement("button");
           rejectBtn.textContent = "❌";
           rejectBtn.className = "btn-small";
           rejectBtn.style.marginLeft = "4px";
-
+          
           approveBtn.addEventListener("click", async () => {
             await updateDoc(pendingRef, { status: "user" });
             const groupRef = doc(db, "groups", data.groupId);
@@ -176,12 +189,12 @@ async function loadGroups() {
             }
             loadGroups();
           });
-
+          
           rejectBtn.addEventListener("click", async () => {
             await deleteDoc(pendingRef);
             loadGroups();
           });
-
+          
           requestRow.appendChild(requester);
           requestRow.appendChild(approveBtn);
           requestRow.appendChild(rejectBtn);
@@ -235,6 +248,7 @@ async function loadGroupDetails(groupId, container) {
   const deleteGroupBtn = document.createElement("button");
   deleteGroupBtn.textContent = "Elimina gruppo";
   deleteGroupBtn.className = "btn-secondary";
+  deleteGroupBtn.style.display = "block";
   deleteGroupBtn.style.marginTop = "10px";
   deleteGroupBtn.addEventListener("click", async () => {
     if (confirm("Sei sicuro di voler eliminare il gruppo?")) {
@@ -284,9 +298,10 @@ const newGroupForm = document.getElementById("new-group-form");
 
 if (createGroupBtn && newGroupForm) {
   createGroupBtn.addEventListener("click", () => {
-    newGroupForm.style.display = (!newGroupForm.style.display || newGroupForm.style.display === "none")
-      ? "block"
-      : "none";
+    newGroupForm.style.display =
+      (!newGroupForm.style.display || newGroupForm.style.display === "none")
+        ? "block"
+        : "none";
   });
 }
 
