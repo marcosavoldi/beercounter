@@ -123,6 +123,22 @@ main {
   background-color: #a80b41;
 }
 
+.btn-small {
+  background-color: var(--color-primary);
+  border: none;
+  color: var(--color-text);
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-small:hover {
+  background-color: var(--color-accent);
+  color: white;
+}
+
 /* ===== DASHBOARD ===== */
 .dashboard {
   padding: 40px 16px;
@@ -173,16 +189,6 @@ main {
 #groups-list li::before {
   content: "🍺 ";
   margin-right: 4px;
-}
-
-#create-group-container {
-  margin-top: 24px;
-}
-
-#create-group-container {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
 }
 
 /* ===== CARD GRUPPI - STATO UTENTE ===== */
@@ -246,7 +252,6 @@ main {
 }
 
 /* === FORM CREAZIONE GRUPPO === */
-
 .group-form {
   margin-top: 20px;
   background-color: white;
@@ -278,23 +283,6 @@ main {
   outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 4px var(--color-accent);
-}
-
-
-.btn-small {
-  background-color: var(--color-primary);
-  border: none;
-  color: var(--color-text);
-  padding: 6px 12px;
-  font-size: 0.9rem;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.btn-small:hover {
-  background-color: var(--color-accent);
-  color: white;
 }
 
 /* ===== RESPONSIVE ===== */
@@ -335,3 +323,47 @@ main {
   background-color: #eee;
   border-top: 2px dashed var(--color-accent);
 }
+
+/* ====== GROUP PAGE STYLES ====== */
+/* Regole specifiche per la pagina group.html (area del gruppo) */
+
+#transaction-section,
+#history-section {
+  margin: 20px auto;
+  padding: 15px;
+  border: 1px solid var(--color-primary);
+  background-color: var(--color-background);
+  max-width: 600px;
+}
+
+#transaction-section label,
+#transaction-section select,
+#transaction-section div,
+#transaction-section button,
+#history-section h2,
+#history-list p {
+  display: block;
+  margin-top: 10px;
+}
+
+#recipients-list > div {
+  margin-bottom: 8px;
+}
+
+/* Pulsanti verticali – classe di utilità */
+.btn-vertical {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  text-align: center;
+}
+
+/* Stile per il pulsante “Indietro” nella pagina group.html */
+#back-btn {
+  font-size: 1rem;
+  padding: 8px 16px;
+  margin-right: 16px;
+  cursor: pointer;
+}
+
+/* Puoi ulteriormente espandere queste regole per perfezionare l'interfaccia della pagina group.html */
