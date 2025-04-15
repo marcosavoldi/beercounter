@@ -48,19 +48,20 @@ main {
   width: 100%;
 }
 
-/* Stili specifici per la header della pagina group.html */
+/* Stili per la header della pagina group.html */
 #back-btn {
   font-size: 0.8rem;      /* Font più piccolo */
   padding: 4px 8px;       /* Ridotto padding */
-  margin-right: 8px;      /* Margine a destra più contenuto */
+  margin-right: 8px;      /* Margine ridotto */
   cursor: pointer;
+  flex: 0 0 20%;         /* Occupare al massimo il 20% della larghezza */
 }
 
 #group-name-header {
-  flex-grow: 1;           /* Occupa lo spazio libero */
-  text-align: left;       /* Allineato a sinistra */
-  font-size: 1.8rem;      /* Testo più grande per evidenziare il nome */
-  white-space: nowrap;    /* Evita a capo */
+  flex: 1 1 80%;         /* Occupare il restante 80% */
+  text-align: left;
+  font-size: 1.8rem;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -68,14 +69,6 @@ main {
 .logo {
   width: 50px;
   height: auto;
-}
-
-#acting-user {
-  width: 100%;
-  font-size: 1rem;       /* aumenta la dimensione del testo */
-  padding: 10px;         /* padding interno per renderla più spaziosa */
-  border: 1px solid #ccc;
-  border-radius: 8px;
 }
 
 /* ===== FOOTER ===== */
@@ -347,7 +340,6 @@ main {
 
 /* ====== GROUP PAGE STYLES (Integrati in style.css) ====== */
 /* Regole specifiche per la pagina group.html (area del gruppo) */
-
 #transaction-section,
 #history-section {
   margin: 20px auto;
@@ -367,8 +359,16 @@ main {
   margin-top: 10px;
 }
 
+#transaction-type label {
+  display: block;  /* Forza a capo per ogni radio button */
+}
+
 #recipients-list > div {
   margin-bottom: 8px;
+  /* Allinea checkbox e testo in linea */
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Classe di utilità per pulsanti verticali */
@@ -378,8 +378,3 @@ main {
   margin-top: 10px;
   text-align: center;
 }
-
-/* Stile per il pulsante "Indietro" nella pagina group.html */
-/* (già definito sopra come #back-btn) */
-
-/* Altre regole specifiche per la pagina group.html possono essere aggiunte qui */
