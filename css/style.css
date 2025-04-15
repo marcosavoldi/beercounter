@@ -227,21 +227,18 @@ main {
 
 /* Emoji badge ruolo */
 .card-gruppo p::before {
-  content: "\1F464  ";
-  /* 👤 */
+  content: "\1F464  "; /* 👤 */
   margin-right: 4px;
   color: var(--color-secondary);
 }
 
 .card-gruppo[data-ruolo="admin"] p::before {
-  content: "\1F6E0\FE0F  ";
-  /* 🛠️ */
+  content: "\1F6E0\FE0F  "; /* 🛠️ */
   color: var(--color-accent);
 }
 
 .card-gruppo[data-ruolo="attesa"] p::before {
-  content: "\23F3  ";
-  /* ⏳ */
+  content: "\23F3  "; /* ⏳ */
   color: gray;
 }
 
@@ -290,20 +287,20 @@ main {
   .home h1 {
     font-size: 2.8rem;
   }
-
+  
   .btn-primary {
     font-size: 1.1rem;
     padding: 16px 32px;
   }
-
+  
   .dashboard h1 {
     font-size: 2.4rem;
   }
-
+  
   .groups-section h2 {
     font-size: 1.6rem;
   }
-
+  
   .btn-secondary {
     font-size: 1.05rem;
     padding: 14px 28px;
@@ -325,7 +322,7 @@ main {
 }
 
 /* ====== GROUP PAGE STYLES ====== */
-/* Regole specifiche per la pagina group.html (area del gruppo) */
+/* Stili specifici per la pagina group.html integrati in questo file */
 
 #transaction-section,
 #history-section {
@@ -350,7 +347,7 @@ main {
   margin-bottom: 8px;
 }
 
-/* Pulsanti verticali – classe di utilità */
+/* Classe di utilità per pulsanti verticali */
 .btn-vertical {
   display: block;
   width: 100%;
@@ -358,7 +355,7 @@ main {
   text-align: center;
 }
 
-/* Stile per il pulsante “Indietro” nella pagina group.html */
+/* Stile per il pulsante "Indietro" nella pagina group.html */
 #back-btn {
   font-size: 1rem;
   padding: 8px 16px;
@@ -366,4 +363,4 @@ main {
   cursor: pointer;
 }
 
-/* Puoi ulteriormente espandere queste regole per perfezionare l'interfaccia della pagina group.html */
+/* Altre regole specifiche per la pagina group.html possono essere aggiunte qui */
