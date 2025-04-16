@@ -193,7 +193,7 @@ async function loadPendingForGroup(data, groupCard) {
   }
 }
 
-// Funzione per caricare i dettagli del gruppo (lista membri e opzioni admin) - visibile solo se admin
+// Funzione per caricare i dettagli del gruppo (lista membri e opzioni admin) – visibile solo se l'utente è admin
 async function loadGroupDetails(groupId, container) {
   container.innerHTML = "";
   const groupRef = doc(db, "groups", groupId);
@@ -210,7 +210,8 @@ async function loadGroupDetails(groupId, container) {
     const li = document.createElement("li");
     li.style.marginBottom = "6px";
     li.textContent = `${member.name} (${member.uid})`;
-    if (currentUserIsAdmin && member.uid !== loggedInUserId) {
+    // Aggiungi il bottone "Rimuovi" per ogni membro tranne l'utente loggato
+    if (member.uid !== loggedInUserId) {
       const removeBtn = document.createElement("button");
       removeBtn.textContent = "Rimuovi";
       removeBtn.className = "btn-small";
@@ -225,19 +226,18 @@ async function loadGroupDetails(groupId, container) {
   });
   container.appendChild(membersList);
 
-  if (currentUserIsAdmin) {
-    const deleteGroupBtn = document.createElement("button");
-    deleteGroupBtn.textContent = "Elimina gruppo";
-    deleteGroupBtn.className = "btn-secondary";
-    deleteGroupBtn.style.display = "block";
-    deleteGroupBtn.style.marginTop = "10px";
-    deleteGroupBtn.addEventListener("click", async () => {
-      if (confirm("Sei sicuro di voler eliminare il gruppo?")) {
-        await deleteGroup(groupId);
-      }
-    });
-    container.appendChild(deleteGroupBtn);
-  }
+  // Aggiungi il pulsante per eliminare il gruppo
+  const deleteGroupBtn = document.createElement("button");
+  deleteGroupBtn.textContent = "Elimina gruppo";
+  deleteGroupBtn.className = "btn-secondary";
+  deleteGroupBtn.style.display = "block";
+  deleteGroupBtn.style.marginTop = "10px";
+  deleteGroupBtn.addEventListener("click", async () => {
+    if (confirm("Sei sicuro di voler eliminare il gruppo?")) {
+      await deleteGroup(groupId);
+    }
+  });
+  container.appendChild(deleteGroupBtn);
 }
 
 // Funzione per mostrare il popup dei dettagli di una richiesta pending
