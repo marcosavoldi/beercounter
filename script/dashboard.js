@@ -62,7 +62,7 @@ async function loadGroups() {
   for (const docSnap of querySnapshot.docs) {
     const data = docSnap.data();
     console.log("Carico gruppo:", data.name, "Status:", data.status, "GroupId:", data.groupId);
-
+    
     // Crea la card del gruppo
     const groupCard = document.createElement("div");
     groupCard.className = "card-gruppo";
@@ -80,8 +80,8 @@ async function loadGroups() {
       data.status === "admin"
         ? "Sei l’amministratore"
         : data.status === "pending"
-          ? "Richiesta in attesa"
-          : "Sei un membro";
+        ? "Richiesta in attesa"
+        : "Sei un membro";
     groupCard.appendChild(role);
 
     if (data.groupId) {
@@ -241,17 +241,19 @@ async function loadGroupDetails(groupId, container) {
   container.appendChild(deleteGroupBtn);
 }
 
+// Funzione per mostrare il popup dei dettagli di una richiesta pending
+// La funzione ora accetta anche il parametro groupId e costruisce un messaggio formattato
 function showPendingRequestPopup(docPending, groupId) {
   const pendingData = docPending.data();
-  // Calcola il testo in base al numero di birre
   const count = pendingData.count;
+  // Calcola il testo in base al numero di birre
   const beerText = count === 1 ? "una birra" : `${count} birre`;
   
-  // Crea il messaggio formattato in base al tipo di transazione
+  // Costruisce il messaggio formattato in base al tipo di transazione
   let message = "";
   if (pendingData.transType === "deve") {
     message = `Nuovo debito! ${pendingData.actingUserName} deve ${beerText} a ${pendingData.recipientsNames}!`;
-  } else { // transType === "ha"
+  } else {
     message = `Birre pagate! ${pendingData.actingUserName} ha pagato ${beerText} a ${pendingData.recipientsNames}!`;
   }
 
@@ -275,7 +277,7 @@ function showPendingRequestPopup(docPending, groupId) {
   popup.style.textAlign = "center";
 
   const descElem = document.createElement("p");
-  // Il testo qui continua a mostrare la descrizione della richiesta (puoi mantenerlo o rimuoverlo se non serve)
+  // Testo descrittivo per il popup (puoi modificarlo se preferisci)
   descElem.textContent = pendingData.transType === "ha"
     ? `${pendingData.requesterName} ha richiesto di registrare il pagamento di ${beerText} da parte di ${pendingData.actingUserName} verso ${pendingData.recipientsNames}.`
     : `${pendingData.requesterName} ha chiesto di aggiungere un debito di ${beerText} a ${pendingData.recipientsNames}.`;
@@ -303,31 +305,16 @@ function showPendingRequestPopup(docPending, groupId) {
         });
         await updateDoc(groupRef, { members: updatedMembers });
       }
-      // Inserisci la voce nella cronologia del gruppo
+      // Inserisci il documento nella cronologia del gruppo con il messaggio formattato
       const historyRef = collection(db, "groups", groupId, "history");
       await addDoc(historyRef, {
-        message: message,  // Il messaggio formattato in base ai dati
+        message: message,
         timestamp: new Date()
       });
     }
     document.body.removeChild(overlay);
     loadGroups();
   });
-
-  const rejectBtn = document.createElement("button");
-  rejectBtn.textContent = "Rifiuta";
-  rejectBtn.className = "btn-small";
-  rejectBtn.addEventListener("click", async () => {
-    await deleteDoc(docPending.ref);
-    document.body.removeChild(overlay);
-    loadGroups();
-  });
-
-  popup.appendChild(approveBtn);
-  popup.appendChild(rejectBtn);
-  overlay.appendChild(popup);
-  document.body.appendChild(overlay);
-}
 
   const rejectBtn = document.createElement("button");
   rejectBtn.textContent = "Rifiuta";
