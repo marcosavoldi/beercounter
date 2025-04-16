@@ -182,8 +182,9 @@ async function loadPendingForGroup(data, groupCard) {
         detailsBtn.textContent = "🔍 Dettagli";
         detailsBtn.className = "btn-small";
         detailsBtn.style.marginLeft = "8px";
+        // Passa anche l'ID del gruppo al popup
         detailsBtn.addEventListener("click", () => {
-          showPendingRequestPopup(docPending);
+          showPendingRequestPopup(docPending, data.groupId);
         });
         requestRow.appendChild(detailsBtn);
 
@@ -241,7 +242,8 @@ async function loadGroupDetails(groupId, container) {
 }
 
 // Funzione per mostrare il popup dei dettagli di una richiesta pending
-function showPendingRequestPopup(docPending) {
+// Ora accetta anche il parametro groupId
+function showPendingRequestPopup(docPending, groupId) {
   const pendingData = docPending.data();
   let description = "";
   if (pendingData.transType === "ha") {
