@@ -138,16 +138,24 @@ async function loadGroups() {
         await loadPendingForGroup(data, groupCard);
       }
 
-      // Bottone "Accedi al gruppo" - visibile a tutti
-      const accessBtn = document.createElement("button");
-      accessBtn.textContent = "Accedi al gruppo";
-      accessBtn.className = "btn-primary";
-      accessBtn.style.display = "block";
-      accessBtn.style.marginTop = "10px";
-      accessBtn.addEventListener("click", () => {
-        window.location.href = `group.html?g=${data.groupId}`;
-      });
-      groupCard.appendChild(accessBtn);
+      // Se lo status è "pending", mostra il messaggio informativo, altrimenti il bottone "Accedi al gruppo"
+      if (data.status === "pending") {
+        const pendingMsg = document.createElement("p");
+        pendingMsg.textContent = "Richiesta in attesa di approvazione dall'amministratore.";
+        pendingMsg.style.fontStyle = "italic";
+        pendingMsg.style.marginTop = "10px";
+        groupCard.appendChild(pendingMsg);
+      } else {
+        const accessBtn = document.createElement("button");
+        accessBtn.textContent = "Accedi al gruppo";
+        accessBtn.className = "btn-primary";
+        accessBtn.style.display = "block";
+        accessBtn.style.marginTop = "10px";
+        accessBtn.addEventListener("click", () => {
+          window.location.href = `group.html?g=${data.groupId}`;
+        });
+        groupCard.appendChild(accessBtn);
+      }
     }
 
     groupsList.appendChild(groupCard);
@@ -182,7 +190,6 @@ async function loadPendingForGroup(data, groupCard) {
         detailsBtn.textContent = "🔍 Dettagli";
         detailsBtn.className = "btn-small";
         detailsBtn.style.marginLeft = "8px";
-        // Passa anche l'ID del gruppo al popup
         detailsBtn.addEventListener("click", () => {
           showPendingRequestPopup(docPending, data.groupId);
         });
@@ -242,14 +249,11 @@ async function loadGroupDetails(groupId, container) {
 }
 
 // Funzione per mostrare il popup dei dettagli di una richiesta pending
-// La funzione ora accetta anche il parametro groupId e costruisce un messaggio formattato
 function showPendingRequestPopup(docPending, groupId) {
   const pendingData = docPending.data();
   const count = pendingData.count;
-  // Calcola il testo in base al numero di birre
   const beerText = count === 1 ? "una birra" : `${count} birre`;
   
-  // Costruisce il messaggio formattato in base al tipo di transazione
   let message = "";
   if (pendingData.transType === "deve") {
     message = `Nuovo debito! ${pendingData.actingUserName} deve ${beerText} a ${pendingData.recipientsNames}!`;
@@ -277,7 +281,6 @@ function showPendingRequestPopup(docPending, groupId) {
   popup.style.textAlign = "center";
 
   const descElem = document.createElement("p");
-  // Testo descrittivo per il popup (puoi modificarlo se preferisci)
   descElem.textContent = pendingData.transType === "ha"
     ? `${pendingData.requesterName} ha richiesto di registrare il pagamento di ${beerText} da parte di ${pendingData.actingUserName} verso ${pendingData.recipientsNames}.`
     : `${pendingData.requesterName} ha chiesto di aggiungere un debito di ${beerText} a ${pendingData.recipientsNames}.`;
@@ -288,9 +291,7 @@ function showPendingRequestPopup(docPending, groupId) {
   approveBtn.className = "btn-small";
   approveBtn.style.marginRight = "10px";
   approveBtn.addEventListener("click", async () => {
-    // Aggiorna lo status della richiesta pending
     await updateDoc(docPending.ref, { status: "user" });
-    // Aggiorna il gruppo: aggiungi il membro se non già presente
     const groupRef = doc(db, "groups", groupId);
     const groupSnap = await getDoc(groupRef);
     if (groupSnap.exists()) {
@@ -305,7 +306,6 @@ function showPendingRequestPopup(docPending, groupId) {
         });
         await updateDoc(groupRef, { members: updatedMembers });
       }
-      // Inserisci il documento nella cronologia del gruppo con il messaggio formattato
       const historyRef = collection(db, "groups", groupId, "history");
       await addDoc(historyRef, {
         message: message,
@@ -476,4 +476,4 @@ if (fullResetBtn) {
     alert(`✅ Reset completato: eliminati ${gruppiEliminati} gruppi e ${riferimentiUtente} riferimenti utente.`);
     signOut(auth).then(() => location.reload());
   });
-};
+}

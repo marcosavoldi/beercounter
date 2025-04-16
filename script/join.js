@@ -73,12 +73,20 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
 
-    // 4. Tutto ok → salva la richiesta pending
+    // 4. Tutto ok → salva la richiesta pending nella subcollezione dell'utente...
     await setDoc(pendingRef, {
       name: groupData.name,
       groupId: groupId,
       status: "pending",
       requesterName: user.displayName || "utente"
+    });
+
+    // ...e salva anche la richiesta nella subcollezione "pendingTransactions" del gruppo
+    const groupPendingRef = doc(db, "groups", groupId, "pendingTransactions", userId);
+    await setDoc(groupPendingRef, {
+      status: "pending",
+      requesterName: user.displayName || "utente",
+      timestamp: new Date()
     });
 
     alert("✅ Richiesta inviata! Attendi che l’amministratore ti approvi.");
