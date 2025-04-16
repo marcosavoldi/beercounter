@@ -282,14 +282,19 @@ function showPendingRequestPopup(docPending, groupId) {
     approveBtn.className = "btn-small";
     approveBtn.style.marginRight = "10px";
     approveBtn.addEventListener("click", async () => {
+      // Aggiorna lo status della richiesta pending nella subcollezione del gruppo
       await updateDoc(docPending.ref, { status: "user" });
+      // Recupera l'UID del richiedente
+      const requesterUid = pendingData.requesterUid || docPending.id;
+      // Aggiorna anche il documento della richiesta nella subcollezione dell'utente, per renderlo non più "pending"
+      const userJoinRef = doc(db, "users", requesterUid, "groups", groupId);
+      await updateDoc(userJoinRef, { status: "member" });
+      // Aggiungi l'utente alla lista dei membri del gruppo
       const groupRef = doc(db, "groups", groupId);
       const groupSnap = await getDoc(groupRef);
       if (groupSnap.exists()) {
         const groupDataLocal = groupSnap.data();
         const updatedMembers = [...(groupDataLocal.members || [])];
-        // Usa il campo requesterUid, altrimenti usa il doc id come fallback
-        const requesterUid = pendingData.requesterUid || docPending.id;
         updatedMembers.push({
           uid: requesterUid,
           role: "user",
