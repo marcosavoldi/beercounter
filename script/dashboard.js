@@ -280,6 +280,7 @@ function showPendingRequestPopup(docPending, groupId) {
   approveBtn.className = "btn-small";
   approveBtn.style.marginRight = "10px";
   approveBtn.addEventListener("click", async () => {
+    // Aggiorna lo status della richiesta pending
     await updateDoc(docPending.ref, { status: "user" });
     // Aggiorna il gruppo: aggiungi il membro se non già presente
     const groupRef = doc(db, "groups", groupId);
@@ -296,6 +297,12 @@ function showPendingRequestPopup(docPending, groupId) {
         });
         await updateDoc(groupRef, { members: updatedMembers });
       }
+      // **INSERISCI QUI LA VOCE NELLA CRONOLOGIA DEL GRUPPO**
+      const historyRef = collection(db, "groups", groupId, "history");
+      await addDoc(historyRef, {
+        message: pendingData.message,  // puoi usare il messaggio originale
+        timestamp: new Date()
+      });
     }
     document.body.removeChild(overlay);
     loadGroups();
