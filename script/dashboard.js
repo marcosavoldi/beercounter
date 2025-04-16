@@ -288,9 +288,10 @@ function showPendingRequestPopup(docPending, groupId) {
       if (groupSnap.exists()) {
         const groupDataLocal = groupSnap.data();
         const updatedMembers = [...(groupDataLocal.members || [])];
-        // Assicurati che join.js abbia salvato anche il campo requesterUid
+        // Usa il campo requesterUid, altrimenti usa il doc id come fallback
+        const requesterUid = pendingData.requesterUid || docPending.id;
         updatedMembers.push({
-          uid: pendingData.requesterUid,
+          uid: requesterUid,
           role: "user",
           name: pendingData.requesterName || "Utente"
         });
