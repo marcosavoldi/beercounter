@@ -251,6 +251,72 @@ async function loadGroupDetails(groupId, container) {
 // Funzione per mostrare il popup dei dettagli di una richiesta pending
 function showPendingRequestPopup(docPending, groupId) {
   const pendingData = docPending.data();
+  
+  // Se non è presente 'transType', supponiamo si tratti di una join request
+  if (!pendingData.transType) {
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.backgroundColor = "rgba(0,0,0,0.5)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.zIndex = "9999";
+  
+    const popup = document.createElement("div");
+    popup.style.backgroundColor = "#fff";
+    popup.style.padding = "20px";
+    popup.style.borderRadius = "8px";
+    popup.style.maxWidth = "400px";
+    popup.style.textAlign = "center";
+    
+    const descElem = document.createElement("p");
+    descElem.textContent = `${pendingData.requesterName} ha chiesto di essere aggiunto al gruppo!`;
+    popup.appendChild(descElem);
+  
+    const approveBtn = document.createElement("button");
+    approveBtn.textContent = "Approva";
+    approveBtn.className = "btn-small";
+    approveBtn.style.marginRight = "10px";
+    approveBtn.addEventListener("click", async () => {
+      await updateDoc(docPending.ref, { status: "user" });
+      const groupRef = doc(db, "groups", groupId);
+      const groupSnap = await getDoc(groupRef);
+      if (groupSnap.exists()) {
+        const groupDataLocal = groupSnap.data();
+        const updatedMembers = [...(groupDataLocal.members || [])];
+        // Assicurati che join.js abbia salvato anche il campo requesterUid
+        updatedMembers.push({
+          uid: pendingData.requesterUid,
+          role: "user",
+          name: pendingData.requesterName || "Utente"
+        });
+        await updateDoc(groupRef, { members: updatedMembers });
+      }
+      document.body.removeChild(overlay);
+      loadGroups();
+    });
+    popup.appendChild(approveBtn);
+  
+    const rejectBtn = document.createElement("button");
+    rejectBtn.textContent = "Rifiuta";
+    rejectBtn.className = "btn-small";
+    rejectBtn.addEventListener("click", async () => {
+      await deleteDoc(docPending.ref);
+      document.body.removeChild(overlay);
+      loadGroups();
+    });
+    popup.appendChild(rejectBtn);
+  
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    return;
+  }
+  
+  // Se invece si tratta di una richiesta relativa alle transazioni sulle birre
   const count = pendingData.count;
   const beerText = count === 1 ? "una birra" : `${count} birre`;
   
@@ -260,7 +326,7 @@ function showPendingRequestPopup(docPending, groupId) {
   } else {
     message = `Birre pagate! ${pendingData.actingUserName} ha pagato ${beerText} a ${pendingData.recipientsNames}!`;
   }
-
+  
   const overlay = document.createElement("div");
   overlay.style.position = "fixed";
   overlay.style.top = "0";
@@ -272,20 +338,20 @@ function showPendingRequestPopup(docPending, groupId) {
   overlay.style.alignItems = "center";
   overlay.style.justifyContent = "center";
   overlay.style.zIndex = "9999";
-
+  
   const popup = document.createElement("div");
   popup.style.backgroundColor = "#fff";
   popup.style.padding = "20px";
   popup.style.borderRadius = "8px";
   popup.style.maxWidth = "400px";
   popup.style.textAlign = "center";
-
+  
   const descElem = document.createElement("p");
   descElem.textContent = pendingData.transType === "ha"
     ? `${pendingData.requesterName} ha richiesto di registrare il pagamento di ${beerText} da parte di ${pendingData.actingUserName} verso ${pendingData.recipientsNames}.`
     : `${pendingData.requesterName} ha chiesto di aggiungere un debito di ${beerText} a ${pendingData.recipientsNames}.`;
   popup.appendChild(descElem);
-
+  
   const approveBtn = document.createElement("button");
   approveBtn.textContent = "Approva";
   approveBtn.className = "btn-small";
@@ -315,7 +381,7 @@ function showPendingRequestPopup(docPending, groupId) {
     document.body.removeChild(overlay);
     loadGroups();
   });
-
+  
   const rejectBtn = document.createElement("button");
   rejectBtn.textContent = "Rifiuta";
   rejectBtn.className = "btn-small";
@@ -324,7 +390,7 @@ function showPendingRequestPopup(docPending, groupId) {
     document.body.removeChild(overlay);
     loadGroups();
   });
-
+  
   popup.appendChild(approveBtn);
   popup.appendChild(rejectBtn);
   overlay.appendChild(popup);
