@@ -50,15 +50,15 @@ main {
 
 /* Stili per la header della pagina group.html */
 #back-btn {
-  font-size: 0.8rem;      /* Font più piccolo */
-  padding: 4px 8px;       /* Ridotto padding */
-  margin-right: 8px;      /* Margine ridotto */
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  margin-right: 8px;
   cursor: pointer;
-  flex: 0 0 20%;         /* Occupare al massimo il 20% della larghezza */
+  flex: 0 0 20%;
 }
 
 #group-name-header {
-  flex: 1 1 80%;         /* Occupare il restante 80% */
+  flex: 1 1 80%;
   text-align: left;
   font-size: 1.8rem;
   white-space: nowrap;
@@ -114,13 +114,19 @@ main {
   font-size: 1rem;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+  animation: float 3s ease-in-out infinite;
 }
 
 .btn-primary:hover {
   background-color: var(--color-accent);
   color: white;
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+  box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
 }
 
 .btn-secondary {
@@ -132,12 +138,17 @@ main {
   border-radius: 12px;
   cursor: pointer;
   margin-top: 40px;
-  transition: background-color 0.3s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .btn-secondary:hover {
   background-color: #a80b41;
+}
+
+.btn-secondary:active {
+  transform: scale(0.95);
+  box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
 }
 
 .btn-small {
@@ -197,6 +208,8 @@ main {
   text-align: left;
   box-shadow: 1px 2px 6px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s;
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out forwards;
 }
 
 #groups-list li:hover {
@@ -219,6 +232,8 @@ main {
   text-align: left;
   transition: transform 0.2s;
   position: relative;
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out forwards;
 }
 
 .card-gruppo:hover {
@@ -276,6 +291,9 @@ main {
   margin-inline: auto;
   box-shadow: 1px 2px 8px rgba(0, 0, 0, 0.1);
   text-align: center;
+  opacity: 0;
+  animation: slideUp 0.4s ease-out forwards;
+  animation-delay: 0.3s;
 }
 
 .group-form h3 {
@@ -331,15 +349,7 @@ main {
   }
 }
 
-#dev-panel {
-  padding: 20px;
-  text-align: center;
-  background-color: #eee;
-  border-top: 2px dashed var(--color-accent);
-}
-
-/* ====== GROUP PAGE STYLES (Integrati in style.css) ====== */
-/* Regole specifiche per la pagina group.html (area del gruppo) */
+/* === Specifico per page group.html (area del gruppo) === */
 #transaction-section,
 #history-section {
   margin: 20px auto;
@@ -360,12 +370,11 @@ main {
 }
 
 #transaction-type label {
-  display: block;  /* Forza a capo per ogni radio button */
+  display: block;
 }
 
 #recipients-list > div {
   margin-bottom: 8px;
-  /* Allinea checkbox e testo in linea */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -378,3 +387,133 @@ main {
   margin-top: 10px;
   text-align: center;
 }
+
+/* ====== ANIMATIONS ====== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* Emoji pulsing in debt summary */
+#debts-summary p .emoji {
+  display: inline-block;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* SlideUp and fadeIn applied above for group-form, cards, list items */
+
+/* ===== ADDITIONAL FUN ANIMATIONS ===== */
+
+/* Header border-color pulsating */
+@keyframes headerPulse {
+  0%, 100% { border-bottom-color: var(--color-primary); }
+  50%      { border-bottom-color: var(--color-accent); }
+}
+.site-header {
+  animation: headerPulse 4s ease-in-out infinite;
+}
+
+/* Logo wobble on hover */
+@keyframes wobble {
+  0%   { transform: rotate(0deg); }
+  25%  { transform: rotate(5deg); }
+  50%  { transform: rotate(-5deg); }
+  75%  { transform: rotate(4deg); }
+  100% { transform: rotate(0deg); }
+}
+.logo:hover {
+  animation: wobble 1s ease-in-out;
+}
+
+/* Shimmer effect for notes */
+@keyframes shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+.note {
+  background: linear-gradient(90deg, var(--color-note) 25%, rgba(255,255,255,0.4) 50%, var(--color-note) 75%);
+  background-size: 400% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 3s infinite;
+}
+
+/* Card wobble on hover */
+.card-gruppo:hover {
+  animation: wobble 0.8s ease-in-out;
+}
+
+/* Button rainbow border effect */
+@keyframes rainbow {
+  0%   { border-color: #ffca3a; }
+  25%  { border-color: #1982c4; }
+  50%  { border-color: #d81159; }
+  75%  { border-color: #ffca3a; }
+  100% { border-color: #1982c4; }
+}
+.btn-primary {
+  border: 2px solid var(--color-primary);
+}
+.btn-primary:hover {
+  animation: rainbow 2s infinite;
+}
+
+/* Home heading swing */
+@keyframes swing {
+  0%   { transform: rotate(0deg); }
+  20%  { transform: rotate(5deg); }
+  40%  { transform: rotate(-5deg); }
+  60%  { transform: rotate(4deg); }
+  80%  { transform: rotate(-4deg); }
+  100% { transform: rotate(0deg); }
+}
+.home h1 {
+  display: inline-block;
+  animation: swing 5s ease-in-out infinite;
+}
+
+/* End of additional animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* Emoji pulsing in debt summary */
+#debts-summary p .emoji {
+  display: inline-block;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* SlideUp and fadeIn applied above for group-form, cards, list items */
