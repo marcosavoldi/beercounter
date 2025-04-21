@@ -2,21 +2,23 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebas
 import {
   getAuth,
   onAuthStateChanged,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider
 } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
 import {
   getFirestore,
-  getDoc,
   doc,
+  getDoc,
   setDoc
 } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-// Utilizza la configurazione Firebase definita in config.js
+// Config e inizializzazione Firebase
 const firebaseConfig = window.firebaseConfig;
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
 
 // Recupera l'ID del gruppo dall'URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -27,53 +29,37 @@ if (!groupId) {
   window.location.href = "index.html";
 }
 
-// Quando l'utente è loggato
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    // Login forzato con popup se l'utente non è loggato
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      alert("❌ Login necessario per entrare in un gruppo.");
-      window.location.href = "index.html";
-    }
-    return;
-  }
-
+// Logica di join (pending) estratta in funzione
+async function joinGroupLogic() {
   try {
-    // 1. Controlla se il gruppo esiste
     const groupRef = doc(db, "groups", groupId);
     const groupSnap = await getDoc(groupRef);
 
     if (!groupSnap.exists()) {
       alert("❌ Il gruppo non esiste o è stato eliminato.");
-      window.location.href = "index.html";
-      return;
+      return window.location.href = "index.html";
     }
 
     const groupData = groupSnap.data();
+    const user = auth.currentUser;
     const userId = user.uid;
 
-    // 2. Se l'utente è già membro o admin → non fare nulla
+    // Controlla se già membro/admin
     const isGiaMembro = (groupData.members || []).some(m => m.uid === userId);
     if (isGiaMembro) {
       alert("⚠️ Sei già in questo gruppo.");
-      window.location.href = "dashboard.html";
-      return;
+      return window.location.href = "dashboard.html";
     }
 
-    // 3. Verifica se hai già inviato una richiesta pending
+    // Controlla richieste pending precedenti
     const pendingRef = doc(db, "users", userId, "groups", groupId);
     const pendingSnap = await getDoc(pendingRef);
-
     if (pendingSnap.exists()) {
       alert("⚠️ Hai già richiesto di entrare in questo gruppo. Attendi approvazione.");
-      window.location.href = "dashboard.html";
-      return;
+      return window.location.href = "dashboard.html";
     }
 
-    // 4. Tutto ok → salva la richiesta pending nella subcollezione dell'utente...
+    // Registra richiesta pending utente
     await setDoc(pendingRef, {
       name: groupData.name,
       groupId: groupId,
@@ -81,7 +67,7 @@ onAuthStateChanged(auth, async (user) => {
       requesterName: user.displayName || "utente"
     });
 
-    // ...e salva anche la richiesta nella subcollezione "pendingTransactions" del gruppo
+    // Registra nella subcollezione pendingTransactions del gruppo
     const groupPendingRef = doc(db, "groups", groupId, "pendingTransactions", userId);
     await setDoc(groupPendingRef, {
       status: "pending",
@@ -95,5 +81,30 @@ onAuthStateChanged(auth, async (user) => {
     console.error("Errore durante la gestione invito:", err);
     alert("❌ Errore durante l'accesso al gruppo.");
     window.location.href = "index.html";
+  }
+}
+
+// Dopo il redirect dal login
+getRedirectResult(auth)
+  .then(result => {
+    if (result && result.user) {
+      joinGroupLogic();
+    }
+  })
+  .catch(error => {
+    console.error("getRedirectResult error:", error);
+  });
+
+// Controllo stato autenticazione per utenti già loggati
+onAuthStateChanged(auth, user => {
+  if (!user) {
+    // Non loggato: avvia il redirect al login Google
+    signInWithRedirect(auth, provider);
+  } else {
+    // Loggato: esegui join se non già processato
+    if (!window.__joinProcessed) {
+      window.__joinProcessed = true;
+      joinGroupLogic();
+    }
   }
 });
