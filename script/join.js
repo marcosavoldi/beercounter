@@ -1,35 +1,23 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInWithRedirect,
-  getRedirectResult,
-  GoogleAuthProvider
-} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc
-} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
 // Config e inizializzazione Firebase
 const firebaseConfig = window.firebaseConfig;
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const provider = new GoogleAuthProvider();
 
-// Recupera l'ID del gruppo dall'URL
-const urlParams = new URLSearchParams(window.location.search);
-const groupId = urlParams.get("g");
-
+// Recupera ID del gruppo dall'URL e path di redirect
+const params = new URLSearchParams(window.location.search);
+const groupId = params.get("g");
 if (!groupId) {
   alert("❌ Link di invito non valido.");
   window.location.href = "index.html";
 }
+const redirectPath = window.location.pathname + window.location.search;
 
-// Logica di join (pending) estratta in funzione
+// Logica per l'invio della richiesta pending
 async function joinGroupLogic() {
   try {
     const groupRef = doc(db, "groups", groupId);
@@ -44,14 +32,14 @@ async function joinGroupLogic() {
     const user = auth.currentUser;
     const userId = user.uid;
 
-    // Controlla se già membro/admin
-    const isGiaMembro = (groupData.members || []).some(m => m.uid === userId);
-    if (isGiaMembro) {
+    // Verifica se già membro o admin
+    const isMember = (groupData.members || []).some(m => m.uid === userId);
+    if (isMember) {
       alert("⚠️ Sei già in questo gruppo.");
       return window.location.href = "dashboard.html";
     }
 
-    // Controlla richieste pending precedenti
+    // Verifica richieste pending precedenti
     const pendingRef = doc(db, "users", userId, "groups", groupId);
     const pendingSnap = await getDoc(pendingRef);
     if (pendingSnap.exists()) {
@@ -62,12 +50,12 @@ async function joinGroupLogic() {
     // Registra richiesta pending utente
     await setDoc(pendingRef, {
       name: groupData.name,
-      groupId: groupId,
+      groupId,
       status: "pending",
       requesterName: user.displayName || "utente"
     });
 
-    // Registra nella subcollezione pendingTransactions del gruppo
+    // Registra richiesta nella subcollezione pendingTransactions del gruppo
     const groupPendingRef = doc(db, "groups", groupId, "pendingTransactions", userId);
     await setDoc(groupPendingRef, {
       status: "pending",
@@ -84,27 +72,14 @@ async function joinGroupLogic() {
   }
 }
 
-// Dopo il redirect dal login
-getRedirectResult(auth)
-  .then(result => {
-    if (result && result.user) {
-      joinGroupLogic();
-    }
-  })
-  .catch(error => {
-    console.error("getRedirectResult error:", error);
-  });
-
-// Controllo stato autenticazione per utenti già loggati
-onAuthStateChanged(auth, user => {
+// Controllo stato autenticazione e redirect se necessario
+onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    // Non loggato: avvia il redirect al login Google
-    signInWithRedirect(auth, provider);
-  } else {
-    // Loggato: esegui join se non già processato
-    if (!window.__joinProcessed) {
-      window.__joinProcessed = true;
-      joinGroupLogic();
-    }
+    // Non loggato: vai alla pagina di login, passando il path di invito
+    window.location.href = `index.html?redirect=${encodeURIComponent(redirectPath)}`;
+    return;
   }
+
+  // Utente loggato: esegui la logica di join
+  await joinGroupLogic();
 });

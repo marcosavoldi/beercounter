@@ -4,7 +4,6 @@ import { getFirestore, enableIndexedDbPersistence } from "https://www.gstatic.co
 
 // Utilizza la configurazione Firebase definita in config.js (assicurati di caricare config.js prima di auth.js)
 const firebaseConfig = window.firebaseConfig;
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -19,6 +18,9 @@ enableIndexedDbPersistence(db)
     }
   });
 
+// Recupera eventuale parametro di redirect dopo login
+const redirectParam = new URLSearchParams(window.location.search).get('redirect');
+
 // Gestisci il login con Google
 const provider = new GoogleAuthProvider();
 const loginBtn = document.getElementById("login-btn");
@@ -29,8 +31,8 @@ if (loginBtn) {
       .then((result) => {
         const user = result.user;
         console.log("✅ Login riuscito:", user.displayName);
-        // Reindirizza alla dashboard o salva dati nel database
-        window.location.href = "dashboard.html";
+        // Se esiste redirectParam, torna alla pagina originale, altrimenti vai alla dashboard
+        window.location.href = redirectParam ? decodeURIComponent(redirectParam) : "dashboard.html";
       })
       .catch((error) => {
         console.error("❌ Errore login:", error);
