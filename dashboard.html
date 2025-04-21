@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Beercounter.it 🍻</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
 
   <!-- HEADER con logo -->
@@ -40,7 +42,41 @@
   <!-- FOOTER -->
   <footer class="site-footer">
     <p>&copy; 2025 Beercounter.it</p>
+    <p>
+      <a href="/privacy.html">Privacy Policy</a> |
+      <a href="/cookie-policy.html">Cookie Policy</a>
+    </p>
   </footer>
+
+<!-- Cookie Banner -->
+<div id="cookie-banner" style="
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.8); color: #fff; padding: 16px; text-align: center; z-index: 9999;
+">
+  Usiamo cookie tecnici per l’autenticazione. Continuando la navigazione accetti la nostra 
+  <a href="/cookie-policy.html" style="color:#ffd700; text-decoration: underline;">Cookie Policy</a>.
+  <button id="cookie-accept" style="
+    margin-left: 12px; padding: 8px 16px; border: none; background: #ffd700; color:#000; cursor:pointer;
+  ">Ho capito</button>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const banner = document.getElementById('cookie-banner');
+    const btn    = document.getElementById('cookie-accept');
+    // Se ha già accettato, nascondi subito
+    if (localStorage.getItem('cookieAccepted')) {
+      banner.style.display = 'none';
+      return;
+    }
+    // Al click salva stato e nascondi
+    btn.addEventListener('click', () => {
+      localStorage.setItem('cookieAccepted', 'true');
+      banner.style.display = 'none';
+    });
+  });
+</script>
+<!-- End Cookie Banner -->
 
   <!-- 🔧 Pannello di sviluppo (solo test) 
   <div id="dev-panel" style="margin-top: 40px; display: none;">
@@ -54,4 +90,5 @@
   <!-- Carica lo script dashboard.js che utilizza window.firebaseConfig -->
   <script type="module" src="script/dashboard.js"></script>
 </body>
+
 </html>
