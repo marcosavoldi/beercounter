@@ -6,11 +6,23 @@ import { Beer } from 'lucide-react';
 export default function Login() {
   const { loginWithGoogle, currentUser } = useAuth();
   const navigate = useNavigate();
+  const [deferredPrompt, setDeferredPrompt] = React.useState(null);
 
   useEffect(() => {
     if (currentUser) {
       navigate('/dashboard');
     }
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, [currentUser, navigate]);
 
   const handleLogin = async () => {
@@ -19,6 +31,15 @@ export default function Login() {
       navigate('/dashboard');
     } catch (error) {
       console.error("Failed to login", error);
+    }
+  };
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
     }
   };
 
@@ -70,6 +91,15 @@ export default function Login() {
             Accedi con Google
           </span>
         </button>
+
+        {deferredPrompt && (
+          <button 
+            onClick={handleInstallClick}
+            className="w-full py-3 px-6 rounded-xl border-2 border-beer-gold text-beer-gold font-bold hover:bg-beer-gold/10 transition-colors animate-pulse"
+          >
+            📲 Installa l'app per non perderti neanche una goccia... di notifica! 🍺
+          </button>
+        )}
 
         <div className="text-sm text-gray-400 space-y-1">
           <p>🍺 Nessuna registrazione richiesta</p>
