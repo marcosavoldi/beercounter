@@ -5,7 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { formatName } from '../utils/stringUtils';
-import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera } from 'lucide-react';
+import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users } from 'lucide-react';
 
 export default function Group() {
   const { groupId } = useParams();
@@ -225,11 +225,32 @@ export default function Group() {
            </h1>
         </div>
         
-        {isAdmin && (
-          <button onClick={handleDeleteGroup} className="self-end sm:self-auto px-4 py-2 bg-red-100 rounded-full text-red-500 hover:bg-red-200 transition-colors text-sm font-bold flex items-center gap-2 shrink-0">
-            <Trash2 size={16} /> Elimina Gruppo
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+            <button 
+              onClick={() => {
+                const inviteLink = `${window.location.origin}/join?g=${group.id}`;
+                 if (navigator.share) {
+                   navigator.share({
+                     title: `Unisciti a ${group.name} su BeerCounter!`,
+                     text: 'Vieni a pagare le tue birre (o a fartele offrire)! 🍺',
+                     url: inviteLink,
+                   }).catch(console.error);
+                 } else {
+                   navigator.clipboard.writeText(inviteLink);
+                   alert("Link di invito copiato! 🔗\nInvialo ai tuoi amici.");
+                 }
+              }}
+              className="px-4 py-2 bg-beer-gold text-black rounded-full font-bold shadow-md hover:bg-yellow-400 transition-transform hover:scale-105 flex items-center gap-2 text-sm"
+            >
+              <Users size={18} /> Invita
+            </button>
+            
+            {isAdmin && (
+              <button onClick={handleDeleteGroup} className="px-4 py-2 bg-red-100 rounded-full text-red-500 hover:bg-red-200 transition-colors text-sm font-bold flex items-center gap-2 shrink-0">
+                <Trash2 size={16} />
+              </button>
+            )}
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto space-y-8">
