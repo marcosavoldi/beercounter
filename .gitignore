@@ -1,15 +1,24 @@
-# Escludi il file di configurazione contenente API keys (non versionarlo)
-config.js
-
-# Escludi eventuali file di configurazione ambiente (se presenti)
-.env
-
-# File di log (eventuali file generati da npm o yarn)
+# Logs
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Se utilizzi un tool di build, escludi la cartella dei moduli (non necessario per file statici)
-node_modules/
+node_modules
+dist
+dist-ssr
+*.local
 
-# Aggiungi eventuali altre cartelle o file che non vuoi caricare su GitHub
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
