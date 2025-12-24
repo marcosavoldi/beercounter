@@ -6,21 +6,34 @@ import { Beer } from 'lucide-react';
 export default function Login() {
   const { loginWithGoogle, currentUser } = useAuth();
   const navigate = useNavigate();
-  const [deferredPrompt, setDeferredPrompt] = React.useState(null);
+  const [deferredPrompt, setDeferredPrompt] = React.useState(window.deferredPrompt);
 
   useEffect(() => {
     if (currentUser) {
       navigate('/dashboard');
     }
 
+    // Check if event already happened
+    if (window.deferredPrompt) {
+      setDeferredPrompt(window.deferredPrompt);
+    }
+
+    // Listen for the custom event we dispatched in main.jsx
+    const handlePromptReady = () => {
+      setDeferredPrompt(window.deferredPrompt);
+    };
+    window.addEventListener('deferred-prompt-ready', handlePromptReady);
+
+    // Keep the native listener just in case (though main.jsx handles it)
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
+      window.deferredPrompt = e;
       setDeferredPrompt(e);
     };
-
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
+      window.removeEventListener('deferred-prompt-ready', handlePromptReady);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, [currentUser, navigate]);
