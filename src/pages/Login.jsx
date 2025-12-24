@@ -7,11 +7,17 @@ export default function Login() {
   const { loginWithGoogle, currentUser } = useAuth();
   const navigate = useNavigate();
   const [deferredPrompt, setDeferredPrompt] = React.useState(window.deferredPrompt);
+  const [isIOS, setIsIOS] = React.useState(false);
+  const [showIOSInstructions, setShowIOSInstructions] = React.useState(false);
 
   useEffect(() => {
     if (currentUser) {
       navigate('/dashboard');
     }
+
+    // Check if device is iOS
+    const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(isIosDevice);
 
     // Check if event already happened
     if (window.deferredPrompt) {
@@ -48,6 +54,10 @@ export default function Login() {
   };
 
   const handleInstallClick = async () => {
+    if (isIOS) {
+      setShowIOSInstructions(true);
+      return;
+    }
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
@@ -105,7 +115,7 @@ export default function Login() {
           </span>
         </button>
 
-        {deferredPrompt && (
+        {(deferredPrompt || isIOS) && (
           <button 
             onClick={handleInstallClick}
             className="w-full py-3 px-6 rounded-xl border-2 border-beer-gold text-beer-gold font-bold hover:bg-beer-gold/10 transition-colors animate-pulse"
@@ -113,12 +123,46 @@ export default function Login() {
             📲 Installa l'app per non perderti neanche una goccia... di notifica! 🍺
           </button>
         )}
+        
+        {/* iOS Instructions Modal */}
+        {showIOSInstructions && (
+          <div className="fixed inset-0 bg-black/80 flex items-end sm:items-center justify-center z-50 p-4" onClick={() => setShowIOSInstructions(false)}>
+            <div className="bg-gray-900 border border-beer-gold/30 rounded-3xl p-6 w-full max-w-sm text-center relative animate-slide-up" onClick={e => e.stopPropagation()}>
+               <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-beer-gold p-3 rounded-full shadow-[0_0_20px_rgba(255,215,0,0.5)]">
+                 <img src="/pwa-192x192.png" alt="App Icon" className="w-12 h-12 rounded-xl" onError={(e) => e.target.style.display = 'none'} />
+                 <span className="text-3xl" style={{display: 'none'}}>🍺</span> 
+               </div>
+               
+               <h3 className="text-xl font-bold text-white mt-4 mb-2">Installa su iPhone</h3>
+               <p className="text-gray-300 mb-6">L'app si installa in 2 secondi:</p>
+               
+               <div className="space-y-4 text-left text-gray-200">
+                  <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl">
+                    <span className="text-2xl">1️⃣</span>
+                    <span>Tocca il tasto <strong>Condividi</strong> <span className="text-blue-400 text-xl inline-block align-middle">⎋</span> (in basso)</span>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl border border-beer-gold/30">
+                    <span className="text-2xl">2️⃣</span>
+                    <span>Scorri e scegli <strong>"Aggiungi alla schermata Home"</strong> ➕</span>
+                  </div>
+               </div>
+
+               <button 
+                 onClick={() => setShowIOSInstructions(false)}
+                 className="mt-6 w-full py-3 bg-beer-gold text-black font-bold rounded-xl"
+               >
+                 Capito! 🍻
+               </button>
+            </div>
+          </div>
+        )}
 
         <div className="text-sm text-gray-400 space-y-1">
           <p>🍺 Nessuna registrazione richiesta</p>
           <p>Solo tanta sete.</p>
         </div>
       </div>
+
       
       <footer className="absolute bottom-6 text-center text-gray-600 text-xs">
         <p>&copy; 2025 Beercounter.it • Bevi responsabilmente (o segna tutto qui)</p>
