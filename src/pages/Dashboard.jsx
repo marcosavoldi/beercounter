@@ -131,7 +131,7 @@ export default function Dashboard() {
             {groups.map((group, idx) => (
               <div 
                 key={group.id} 
-                className="group relative bg-[#FFF8E7] p-6 rounded-3xl shadow-sm hover:shadow-xl border border-orange-100 transition-all duration-300 cursor-pointer overflow-hidden animate-slide-up"
+                className="group relative bg-white p-6 rounded-3xl shadow-md hover:shadow-2xl border-2 border-beer-foam hover:border-beer-gold transition-all duration-300 cursor-pointer overflow-hidden animate-slide-up"
                 style={{ animationDelay: `${idx * 100}ms` }}
                 onClick={() => window.location.href = `/group/${group.id}`}
               >

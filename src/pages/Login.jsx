@@ -53,9 +53,9 @@ export default function Login() {
            <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight">
              beer<span className="text-beer-gold">counter</span>
            </h1>
-           <div className="h-8"> 
-             <p className="text-xl md:text-2xl text-gray-300 typewriter font-mono">
-               La birra non si dimentica.
+           <div className="min-h-[4rem] px-4"> 
+             <p className="text-xl md:text-2xl text-gray-300 font-medium animate-[pop_1s_ease-out] leading-relaxed">
+               "La birra non si dimentica,<br className="hidden md:block"/> e nemmeno chi deve pagarla."
              </p>
            </div>
         </div>
