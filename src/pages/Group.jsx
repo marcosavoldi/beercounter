@@ -5,7 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { formatName, getInitials } from '../utils/stringUtils';
-import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell, FileText, Edit2, Save } from 'lucide-react';
+import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell, FileText, Edit2, Save, Beer } from 'lucide-react';
 
 export default function Group() {
   const { groupId } = useParams();
@@ -49,6 +49,12 @@ export default function Group() {
         // Init rules
         setRulesText(data.rules || '');
       } else {
+        // Self-Healing: If group doesn't exist, remove it from user's list
+        console.log("Group not found. Cleaning up reference...");
+        if (currentUser) {
+            await deleteDoc(doc(db, "users", currentUser.uid, "groups", groupId));
+            alert("Il gruppo non esiste più. È stato rimosso dalla tua lista.");
+        }
         navigate('/dashboard');
       }
     } catch (err) {
@@ -190,9 +196,25 @@ export default function Group() {
   const handleDeleteGroup = async () => {
     if (!window.confirm("ELIMINARE IL GRUPPO? Questa azione è irreversibile.")) return;
     try {
+        // 1. Try to remove references from all members
+        // We use allSettled because we might not have permission to write to other users' collections
+        const cleanupPromises = group.members.map(member => 
+            deleteDoc(doc(db, "users", member.uid, "groups", groupId))
+        );
+        
+        await Promise.allSettled(cleanupPromises);
+
+       // 2. Delete the group document (This is the most important)
        await deleteDoc(doc(db, "groups", groupId));
+       
+       alert("Gruppo eliminato correttamente.");
        navigate('/dashboard');
-    } catch(e) { console.error(e); }
+    } catch(e) { 
+        console.error("Deletion error:", e);
+        // Even if something failed, force navigate if the main group is likely gone or we want to exit
+        alert("Potrebbe esserci stato un errore durante la pulizia, ma il gruppo è stato eliminato.");
+        navigate('/dashboard');
+    }
   };
 
   const handleImageUpload = async (e) => {
@@ -561,9 +583,10 @@ export default function Group() {
         <div className="fixed bottom-6 right-6 z-30">
           <button 
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-black text-beer-gold font-black text-lg px-8 py-4 rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:shadow-[0_15px_40px_rgba(255,191,0,0.6)] transform hover:-translate-y-2 hover:scale-105 transition-all duration-300 ring-4 ring-beer-gold/50 animate-bounce"
+            className="flex items-center justify-center gap-1 bg-black text-beer-gold p-4 rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.4)] hover:shadow-[0_15px_40px_rgba(255,191,0,0.6)] transform hover:-translate-y-2 hover:scale-105 transition-all duration-300 ring-4 ring-beer-gold/50 animate-bounce"
           >
-            <Plus size={28} /> AGGIUNGI !!
+            <Plus size={32} strokeWidth={3} />
+            <Beer size={24} />
           </button>
         </div>
 
