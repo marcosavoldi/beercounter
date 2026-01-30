@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc, addDoc, collection, query, orderBy, limit, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, query, orderBy, limit, getDocs, deleteDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { formatName } from '../utils/stringUtils';
-import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users } from 'lucide-react';
+import { formatName, getInitials } from '../utils/stringUtils';
+import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell } from 'lucide-react';
 
 export default function Group() {
   const { groupId } = useParams();
@@ -14,6 +14,7 @@ export default function Group() {
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
   
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -26,6 +27,7 @@ export default function Group() {
   useEffect(() => {
     fetchGroup();
     fetchHistory();
+    fetchPendingRequests();
   }, [groupId]);
 
   async function fetchGroup() {
@@ -56,6 +58,111 @@ export default function Group() {
       setHistory(snap.docs.map(d => d.data()));
     } catch (e) { console.error(e); }
   }
+
+  async function fetchPendingRequests() {
+    try {
+      const q = query(collection(db, "groups", groupId, "pendingTransactions"));
+      const snap = await getDocs(q);
+      setPendingRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error(e); }
+  }
+
+  const handleApproveMember = async (req) => {
+    try {
+      // 1. Add to Group Members
+      const newMember = {
+        uid: req.id, // pending doc ID is usually uid for joins? Check Join.jsx logic. Yes setDoc(..., currentUser.uid)
+        name: req.requesterName,
+        photoURL: req.photoURL || null,
+        role: 'member',
+        saldoBirre: 0
+      };
+      const newMembers = [...group.members, newMember];
+      await updateDoc(doc(db, "groups", groupId), { members: newMembers });
+
+      // 2. Update User Status
+      await updateDoc(doc(db, "users", req.id, "groups", groupId), { status: "active" });
+
+      // 3. Delete Request
+      await deleteDoc(doc(db, "groups", groupId, "pendingTransactions", req.id));
+      
+      // 4. Refresh
+      fetchGroup();
+      fetchPendingRequests();
+      alert(`Benvenuto a bordo, ${req.requesterName}! 🍻`);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleApproveTransaction = async (req) => {
+    try {
+      const actingMember = group.members.find(m => m.uid === req.actingUser);
+      const recipientsMembers = group.members.filter(m => req.recipients.includes(m.uid));
+      
+      if (!actingMember) return alert("Utente non trovato nel gruppo");
+
+      // Use the existing logic function but adapted needed context variables
+      // Re-implementing logic here for safety or refactoring 'processTransactionImmediate' to be reusable?
+      // Let's reuse 'processTransactionImmediate' logic but we need to pass the right params.
+      // Need to temporarily set 'transType' state or pass it? The function uses 'transType' from state. 
+      // Better to Refactor 'processTransactionImmediate' to accept 'type' as arg.
+      
+      // Refactored Logic Inline for safety:
+      const type = req.transType; 
+      
+      // Update Members Saldo
+      const newMembers = group.members.map(m => {
+        let copy = { ...m };
+        if (m.uid === actingMember.uid) {
+          const delta = type === 'deve' ? recipientsMembers.length : -recipientsMembers.length;
+          copy.saldoBirre = (copy.saldoBirre || 0) + delta;
+        }
+        return copy;
+      });
+
+      // Update Debts
+      let newDebts = [...(group.debts || [])];
+      recipientsMembers.forEach(cred => {
+        const idx = newDebts.findIndex(d => d.debtorUid === actingMember.uid && d.creditorUid === cred.uid);
+        const delta = type === 'deve' ? 1 : -1;
+        
+        if (idx >= 0) {
+          newDebts[idx].count += delta;
+          if (newDebts[idx].count <= 0) newDebts.splice(idx, 1);
+        } else if (delta > 0) {
+          newDebts.push({ 
+            debtorUid: actingMember.uid, 
+            debtorName: actingMember.name, 
+            creditorUid: cred.uid, 
+            creditorName: cred.name, 
+            count: 1 
+          });
+        }
+      });
+
+      await updateDoc(doc(db, "groups", groupId), { members: newMembers, debts: newDebts });
+      await addDoc(collection(db, "groups", groupId, "history"), { message: req.message, timestamp: new Date() });
+      
+      // Delete Request
+      await deleteDoc(doc(db, "groups", groupId, "pendingTransactions", req.id));
+
+      fetchGroup();
+      fetchHistory();
+      fetchPendingRequests();
+    } catch (e) { console.error(e); }
+  };
+
+  const handleRejectRequest = async (req) => {
+    if (!confirm("Rifiutare questa richiesta?")) return;
+    try {
+      await deleteDoc(doc(db, "groups", groupId, "pendingTransactions", req.id));
+      if (req.type === 'join') {
+         // Optionally remove the pending status from user doc? 
+         // For now just deleting the group request is enough to block them.
+         await deleteDoc(doc(db, "users", req.id, "groups", groupId));
+      }
+      fetchPendingRequests();
+    } catch (e) { console.error(e); }
+  };
 
   const handleToggleRecipient = (uid) => {
     setSelectedRecipients(prev => 
@@ -180,6 +287,8 @@ export default function Group() {
       recipients: recipientsMembers.map(r => r.uid),
       count: recipientsMembers.length,
       message,
+      type: 'transaction',
+      recipientsNames, // Store names for display
       timestamp: new Date(),
       status: "pending"
     });
@@ -251,6 +360,81 @@ export default function Group() {
               </button>
             )}
         </div>
+
+      {/* ADMIN PANEL - PENDING REQUESTS */}
+      {isAdmin && pendingRequests.length > 0 && (
+        <div className="max-w-3xl mx-auto mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+           <div className="bg-white border-2 border-orange-400 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-orange-400 animate-pulse"></div>
+              
+              <h3 className="text-xl font-black text-orange-600 mb-4 flex items-center gap-2">
+                 <Bell className="animate-bounce" /> RICHIESTE IN SOSPESO
+              </h3>
+
+              <div className="space-y-3">
+                 {pendingRequests.map(req => (
+                    <div key={req.id} className="flex flex-col sm:flex-row items-center justify-between bg-orange-50 p-4 rounded-xl border border-orange-100 gap-4">
+                       
+                       {/* Request Info */}
+                       <div className="flex items-center gap-3 w-full">
+                          {/* Icon based on type */}
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 ${req.type === 'transaction' ? 'bg-blue-500' : 'bg-green-500'}`}>
+                             {req.type === 'transaction' ? 'Tx' : <User size={18} />}
+                          </div>
+                          
+                          <div className="flex-1">
+                             {req.type === 'transaction' ? (
+                                <div className="space-y-1">
+                                    <div className="flex flex-col">
+                                       <span className="text-xs text-gray-500 uppercase font-bold">Chi Deve Pagare:</span>
+                                       <span className="font-bold text-gray-800">{req.transType === 'deve' ? req.actingUserName : req.recipientsNames}</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                       <span className="text-xs text-gray-500 uppercase font-bold">A Chi:</span>
+                                       <span className="font-bold text-gray-800">{req.transType === 'deve' ? req.recipientsNames : req.actingUserName}</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                       <span className="text-xs text-gray-500 uppercase font-bold">Quando:</span>
+                                       <span className="text-xs text-gray-600 font-mono">{new Date(req.timestamp?.seconds * 1000).toLocaleString()}</span>
+                                    </div>
+                                    <div className="mt-1 pt-1 border-t border-orange-200">
+                                       <span className="text-xs italic text-gray-500">"{req.message}"</span>
+                                    </div>
+                                </div>
+                             ) : (
+                                <>
+                                   <p className="font-bold text-gray-800">Richiesta di accesso: {req.requesterName}</p>
+                                   <p className="text-xs text-gray-500">Vuole unirsi al gruppo</p>
+                                   <p className="text-xs text-gray-400 mt-1">{new Date(req.timestamp?.seconds * 1000).toLocaleString()}</p>
+                                </>
+                             )}
+                          </div>
+                       </div>
+
+                       {/* Actions */}
+                       <div className="flex items-center gap-2 shrink-0">
+                          <button 
+                             onClick={() => req.type === 'transaction' ? handleApproveTransaction(req) : handleApproveMember(req)}
+                             className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 shadow-md transition-colors"
+                             title="Approva"
+                          >
+                             <Check size={20} />
+                          </button>
+                          <button 
+                             onClick={() => handleRejectRequest(req)}
+                             className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-md transition-colors"
+                             title="Rifiuta"
+                          >
+                             <X size={20} />
+                          </button>
+                       </div>
+
+                    </div>
+                 ))}
+              </div>
+           </div>
+        </div>
+      )}
       </div>
 
       <div className="max-w-3xl mx-auto space-y-8">
@@ -266,7 +450,11 @@ export default function Group() {
                  <div className="flex -space-x-2">
                     {group.members?.slice(0,3).map((m,i) => (
                       <div key={i} className="w-6 h-6 rounded-full bg-gray-700 border border-gray-800 flex items-center justify-center text-[10px] text-white">
-                        {m.photoURL ? <img src={m.photoURL} className="w-full h-full rounded-full" /> : m.name[0]}
+                        {m.photoURL && m.photoURL.length > 5 ? (
+                          <img src={m.photoURL} className="w-full h-full rounded-full object-cover" onError={(e) => e.target.style.display = 'none'} />
+                        ) : (
+                          <span>{getInitials(m.name)}</span>
+                        )}
                       </div>
                     ))}
                     {group.members?.length > 3 && <div className="w-6 h-6 rounded-full bg-gray-700 border border-gray-800 flex items-center justify-center text-[10px] text-white">+{group.members.length-3}</div>}
@@ -370,13 +558,28 @@ export default function Group() {
               <div key={i} className="bg-white p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center justify-between border border-gray-100">
                  <div className="flex items-center gap-3">
                     {/* Avatar Logic */}
-                    {m.photoURL ? (
-                      <img src={m.photoURL} alt={m.name} className="w-12 h-12 rounded-full border-2 border-gray-100 object-cover" />
-                    ) : (
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${m.role === 'admin' ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-300' : 'bg-gray-100 text-gray-600'}`}>
-                         {m.role === 'admin' ? <Crown size={20} /> : m.name[0]}
+                    <div className="relative shrink-0">
+                      {m.photoURL && m.photoURL.length > 5 ? (
+                         <img 
+                           src={m.photoURL} 
+                           alt={m.name} 
+                           className="w-12 h-12 rounded-full border-2 border-gray-100 object-cover"
+                           onError={(e) => {
+                              e.target.onerror = null; 
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                           }} 
+                         />
+                      ) : null}
+                      
+                      <div 
+                        className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-black border-2 border-gray-100 ${m.role === 'admin' ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-300' : 'bg-gray-100 text-gray-600'}`}
+                        style={{ display: m.photoURL && m.photoURL.length > 5 ? 'none' : 'flex' }}
+                      >
+                         {m.role === 'admin' && <Crown size={14} className="absolute -top-2 -right-1 text-yellow-500" />}
+                         {getInitials(m.name)}
                       </div>
-                    )}
+                    </div>
                     
                     <div>
                        <div className="flex items-center gap-2">

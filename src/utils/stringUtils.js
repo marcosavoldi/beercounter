@@ -8,3 +8,10 @@ export const formatName = (name) => {
     .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Keep rest as is to preserve McLovin etc, or .toLowerCase() if we want strict normalizing
     .join(' ');
 };
+
+export const getInitials = (name) => {
+  if (!name) return "??";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};

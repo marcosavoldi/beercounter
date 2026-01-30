@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, getDocs, addDoc, setDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { formatName } from '../utils/stringUtils';
+import { formatName, getInitials } from '../utils/stringUtils';
 import { LogOut, Plus, Users, Beer, Sparkles, X } from 'lucide-react';
 
 export default function Dashboard() {
@@ -75,13 +75,23 @@ export default function Dashboard() {
            <span className="text-3xl animate-wiggle">🍺</span> Beercounter
         </h1>
         <div className="flex items-center gap-4">
-           {currentUser?.photoURL ? (
-             <img src={currentUser.photoURL} alt="User" className="w-10 h-10 rounded-full border-2 border-beer-gold" />
-           ) : (
-             <div className="w-10 h-10 bg-beer-gold rounded-full flex items-center justify-center font-bold text-lg">
-               {currentUser?.displayName?.[0]}
-             </div>
-           )}
+           {currentUser?.photoURL && currentUser.photoURL.length > 5 ? (
+             <img 
+               src={currentUser.photoURL} 
+               alt="User" 
+               className="w-10 h-10 rounded-full border-2 border-beer-gold object-cover" 
+               onError={(e) => {
+                 e.target.style.display = 'none';
+                 e.target.nextSibling.style.display = 'flex';
+               }}
+             />
+           ) : null}
+           <div 
+             className="w-10 h-10 bg-beer-gold rounded-full flex items-center justify-center font-bold text-lg"
+             style={{ display: currentUser?.photoURL && currentUser.photoURL.length > 5 ? 'none' : 'flex' }}
+           >
+             {getInitials(currentUser?.displayName)}
+           </div>
            <button onClick={logout} className="p-2 rounded-full hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors">
              <LogOut size={20} />
            </button>

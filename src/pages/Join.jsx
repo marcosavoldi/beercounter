@@ -71,6 +71,7 @@ export default function Join() {
         status: "pending",
         requesterName: formatName(currentUser.displayName || "Utente"),
         photoURL: currentUser.photoURL || null, // Pass photo info
+        type: 'join',
         timestamp: new Date()
       });
 
