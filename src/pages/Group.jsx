@@ -5,7 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { formatName, getInitials } from '../utils/stringUtils';
-import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell } from 'lucide-react';
+import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell, FileText, Edit2, Save } from 'lucide-react';
 
 export default function Group() {
   const { groupId } = useParams();
@@ -23,6 +23,10 @@ export default function Group() {
   const [selectedRecipients, setSelectedRecipients] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
+  
+  // Rules State
+  const [rulesText, setRulesText] = useState('');
+  const [isEditingRules, setIsEditingRules] = useState(false);
 
   useEffect(() => {
     fetchGroup();
@@ -41,6 +45,9 @@ export default function Group() {
         // Set default acting user to current user
         const me = data.members?.find(m => m.uid === currentUser?.uid);
         if (me) setActingUser(me.uid);
+        
+        // Init rules
+        setRulesText(data.rules || '');
       } else {
         navigate('/dashboard');
       }
@@ -208,6 +215,18 @@ export default function Group() {
       alert("Errore nel caricamento dell'immagine.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSaveRules = async () => {
+    try {
+      await updateDoc(doc(db, "groups", groupId), { rules: rulesText });
+      setGroup(prev => ({ ...prev, rules: rulesText }));
+      setIsEditingRules(false);
+      alert("Regole aggiornate! 📜");
+    } catch (e) {
+      console.error("Error saving rules:", e);
+      alert("Errore nel salvataggio delle regole.");
     }
   };
 
@@ -481,13 +500,60 @@ export default function Group() {
                 )}
              </div>
 
-             {/* Admin Upload Button (Floating near avatar) */}
+            {/* Admin Upload Button (Floating near avatar) */}
              {isAdmin && (
                <label className="absolute bottom-0 right-0 bg-white text-black p-2 rounded-full cursor-pointer shadow-lg hover:bg-beer-gold transition-colors z-20">
                   <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={uploading} />
                   <Camera size={18} />
                </label>
              )}
+           </div>
+        </div>
+
+        {/* RULES OF THE GAME SECTION */}
+        <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden relative">
+           <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-black text-gray-700 flex items-center gap-2">
+                 <FileText size={20} className="text-beer-amber" /> REGOLE DEL GIOCO
+              </h3>
+              {isAdmin && !isEditingRules && (
+                <button onClick={() => setIsEditingRules(true)} className="text-gray-400 hover:text-black transition-colors">
+                   <Edit2 size={18} />
+                </button>
+              )}
+           </div>
+           
+           <div className="p-6">
+              {isEditingRules ? (
+                <div className="space-y-4 animate-in fade-in">
+                   <textarea 
+                     value={rulesText}
+                     onChange={(e) => setRulesText(e.target.value)}
+                     className="w-full p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl focus:border-beer-gold outline-none min-h-[150px] font-medium text-gray-700 placeholder-gray-400"
+                     placeholder="Scrivi qui le regole... (es. Chi arriva ultimo paga il primo giro)"
+                   />
+                   <div className="flex justify-end gap-2">
+                      <button onClick={() => { setIsEditingRules(false); setRulesText(group.rules || ''); }} className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg">
+                        Annulla
+                      </button>
+                      <button onClick={handleSaveRules} className="px-6 py-2 bg-black text-white font-bold rounded-lg hover:bg-gray-800 flex items-center gap-2">
+                        <Save size={18} /> Salva Regole
+                      </button>
+                   </div>
+                </div>
+              ) : (
+                <div className="prose prose-sm max-w-none text-gray-600">
+                   {group.rules ? (
+                     <p className="whitespace-pre-line leading-relaxed italic border-l-4 border-beer-gold pl-4 py-1">
+                       {group.rules}
+                     </p>
+                   ) : (
+                     <p className="text-gray-400 italic text-center py-4">
+                       Nessuna regola definita... vige l'anarchia! 🏴‍☠️
+                     </p>
+                   )}
+                </div>
+              )}
            </div>
         </div>
 
