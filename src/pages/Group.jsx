@@ -5,7 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { formatName, getInitials } from '../utils/stringUtils';
-import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell, FileText, Edit2, Save, Beer, LogOut, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell, FileText, Edit2, Save, Beer, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
 
 export default function Group() {
@@ -33,6 +33,9 @@ export default function Group() {
   // Rules State
   const [rulesText, setRulesText] = useState('');
   const [isEditingRules, setIsEditingRules] = useState(false);
+
+  // Member Management Modal
+  const [selectedMemberForEdit, setSelectedMemberForEdit] = useState(null);
 
   useEffect(() => {
     fetchGroup();
@@ -329,6 +332,29 @@ export default function Group() {
     }
   };
 
+
+  const handlePromoteMember = async (memberUid, currentRole) => {
+     try {
+        const newRole = currentRole === 'vice_admin' ? 'member' : 'vice_admin';
+        const newMembers = group.members.map(m => m.uid === memberUid ? { ...m, role: newRole } : m);
+        
+        await updateDoc(doc(db, "groups", groupId), { members: newMembers });
+        
+        await addDoc(collection(db, "groups", groupId, "history"), { 
+            message: `👮‍♂️ ${formatName(group.members.find(m => m.uid === memberUid)?.name || 'Utente')} è ora ${newRole === 'vice_admin' ? 'Vice Amministratore' : 'Membro Semplice'}`, 
+            timestamp: new Date() 
+        });
+
+        alert(`Ruolo aggiornato a ${newRole === 'vice_admin' ? 'Vice Admin' : 'Membro'}!`);
+        setSelectedMemberForEdit(null);
+        fetchGroup();
+        fetchHistory();
+     } catch (e) {
+        console.error(e);
+        alert("Errore cambio ruolo");
+     }
+  };
+
   const handleAdminDeleteDebt = async (debtorName, targetCreditorUid, targetCreditorName, rawDebtorUid) => {
     if (!confirm(`Rimuovere 1 birra dal debito verso ${targetCreditorName}?`)) return;
     
@@ -425,9 +451,13 @@ export default function Group() {
       message = `💸 CONTO SALDATO: ${actorName} ha pagato ${quantityTxt} a ${recipientsNames}.`;
     }
 
-    const isAdmin = group.members.find(m => m.uid === currentUser.uid)?.role === 'admin';
 
-    if (isAdmin) {
+
+    const currentUserMember = group.members.find(m => m.uid === currentUser.uid);
+    const isAdmin = currentUserMember?.role === 'admin';
+    const isVice = currentUserMember?.role === 'vice_admin' || isAdmin;
+
+    if (isVice) {
       await processTransactionImmediate(actingMember, recipientsMembers, message);
     } else {
       await processTransactionPending(actingMember, recipientsMembers, message);
@@ -577,7 +607,9 @@ export default function Group() {
 
   // ---- Logic helpers ----
 
-  const isAdmin = group?.members?.find(m => m.uid === currentUser?.uid)?.role === 'admin';
+  const currentUserData = group?.members?.find(m => m.uid === currentUser?.uid);
+  const isAdmin = currentUserData?.role === 'admin';
+  const isVice = currentUserData?.role === 'vice_admin' || isAdmin;
   
   // Consolidate Debts Logic
   const consolidatedDebts = React.useMemo(() => {
@@ -711,7 +743,7 @@ export default function Group() {
         </div>
 
       {/* ADMIN PANEL - PENDING REQUESTS */}
-      {isAdmin && pendingRequests.length > 0 && (
+      {isVice && pendingRequests.length > 0 && (
         <div className="max-w-3xl mx-auto mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
            <div className="bg-white border-2 border-orange-400 rounded-3xl p-6 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-orange-400 animate-pulse"></div>
@@ -995,8 +1027,12 @@ export default function Group() {
                     
                        <div className="flex flex-col">
                           <p className="font-bold text-gray-800">{formatName(m.name)}</p>
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">
-                             {m.role === 'admin' ? 'AMMINISTRATORE' : 'MEMBRO'}
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold flex items-center gap-1">
+                             {m.role === 'admin' ? (
+                                <><Crown size={10} className="text-yellow-500" /> ADMIN</>
+                             ) : m.role === 'vice_admin' ? (
+                                <><ShieldCheck size={10} className="text-blue-500" /> VICE</>
+                             ) : 'MEMBRO'}
                           </p>
                        </div>
                  </div>
@@ -1032,19 +1068,86 @@ export default function Group() {
                         );
                      })()}
                      
-                     {isAdmin && m.uid !== currentUser.uid && (
+                      {isAdmin && m.uid !== currentUser.uid && (
                         <button 
-                          onClick={() => handleRemoveMember(m.uid)} 
-                          className="mt-2 px-3 py-1 bg-red-100/50 hover:bg-red-500 text-red-400 hover:text-white rounded-lg transition-all text-xs font-bold flex items-center gap-1 border border-red-200"
-                          title="Rimuovi Membro dal Gruppo"
+                          onClick={(e) => { 
+                             e.stopPropagation();
+                             setSelectedMemberForEdit(m);
+                          }} 
+                          className="mt-2 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-all text-xs font-bold flex items-center gap-1 border border-gray-200"
+                          title="Gestisci Membro"
                         >
-                           <UserMinus size={14} /> Ban
+                           <Edit2 size={12} /> Gestisci
                         </button>
                      )}
                   </div>
               </div>
            ))}
         </div>
+
+        {/* MEMBER MANAGEMENT MODAL */}
+        {selectedMemberForEdit && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+             <div className="bg-white rounded-3xl p-6 w-full max-w-sm relative shadow-2xl border-4 border-gray-200">
+                <button 
+                  onClick={() => setSelectedMemberForEdit(null)}
+                  className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors"
+                >
+                  <X size={24} />
+                </button>
+
+                <div className="text-center mb-6">
+                   <div className="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center text-3xl mb-3 border-2 border-gray-200">
+                      {selectedMemberForEdit.photoURL ? (
+                         <img src={selectedMemberForEdit.photoURL} className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                         <span>{getInitials(selectedMemberForEdit.name)}</span>
+                      )}
+                   </div>
+                   <h3 className="text-xl font-black text-gray-800">{formatName(selectedMemberForEdit.name)}</h3>
+                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{selectedMemberForEdit.role === 'vice_admin' ? 'VICE AMMINISTRATORE' : selectedMemberForEdit.role === 'admin' ? 'AMMINISTRATORE' : 'MEMBRO'}</p>
+                </div>
+
+                <div className="space-y-3">
+                   {/* Promote/Demote - Only if NOT admin (you can't demote another super admin easily here for safety, or self) */}
+                   {selectedMemberForEdit.role !== 'admin' && (
+                       <button 
+                          onClick={() => handlePromoteMember(selectedMemberForEdit.uid, selectedMemberForEdit.role)}
+                          className={`w-full p-4 rounded-xl flex items-center justify-between font-bold shadow-sm border-2 transition-all ${
+                             selectedMemberForEdit.role === 'vice_admin' 
+                               ? 'bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100' 
+                               : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                          }`}
+                       >
+                          <span className="flex items-center gap-2">
+                             <ShieldCheck size={20} />
+                             {selectedMemberForEdit.role === 'vice_admin' ? 'Rimuovi Vice Admin' : 'Promuovi a Vice Admin'}
+                          </span>
+                          {selectedMemberForEdit.role === 'vice_admin' ? <X size={18} /> : <Check size={18} />}
+                       </button>
+                   )}
+
+                   {/* Ban Button - Moved Here */}
+                   {selectedMemberForEdit.role !== 'admin' && (
+                       <button 
+                          onClick={() => {
+                             if(confirm(`Sei sicuro di voler bannare ${selectedMemberForEdit.name}?`)) {
+                                handleRemoveMember(selectedMemberForEdit.uid);
+                                setSelectedMemberForEdit(null);
+                             }
+                          }}
+                          className="w-full p-4 bg-red-50 border-2 border-red-100 text-red-600 rounded-xl flex items-center justify-between font-bold hover:bg-red-100 hover:border-red-200 transition-colors"
+                       >
+                          <span className="flex items-center gap-2">
+                             <LogOut size={20} /> Ban Utente
+                          </span>
+                          <Trash2 size={18} />
+                       </button>
+                   )}
+                </div>
+             </div>
+          </div>
+        )}
 
         {/* HISTORY */}
         <div className="bg-white/60 p-6 rounded-3xl">
