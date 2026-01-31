@@ -5,7 +5,8 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { formatName, getInitials } from '../utils/stringUtils';
-import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell, FileText, Edit2, Save, Beer } from 'lucide-react';
+import { ArrowLeft, Plus, History, Trash2, UserMinus, Crown, Wallet, PartyPopper, User, Camera, Users, Check, X, Bell, FileText, Edit2, Save, Beer, LogOut, RefreshCw } from 'lucide-react';
+import { useNotifications } from '../hooks/useNotifications';
 
 export default function Group() {
   const { groupId } = useParams();
@@ -15,6 +16,8 @@ export default function Group() {
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const [showNotifDrawer, setShowNotifDrawer] = useState(false);
   
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -23,6 +26,9 @@ export default function Group() {
   const [selectedRecipients, setSelectedRecipients] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
+  
+  // Debt Detail Modal
+  const [selectedDebtDetail, setSelectedDebtDetail] = useState(null);
   
   // Rules State
   const [rulesText, setRulesText] = useState('');
@@ -33,6 +39,13 @@ export default function Group() {
     fetchHistory();
     fetchPendingRequests();
   }, [groupId]);
+
+  useEffect(() => {
+     if (group) {
+        checkOldDebts(group);
+     }
+  }, [group?.id]); // specific dependency to run once per group load
+
 
   async function fetchGroup() {
     if (!groupId) return;
@@ -142,12 +155,13 @@ export default function Group() {
           newDebts[idx].count += delta;
           if (newDebts[idx].count <= 0) newDebts.splice(idx, 1);
         } else if (delta > 0) {
-          newDebts.push({ 
+          newDebts.push({
             debtorUid: actingMember.uid, 
             debtorName: actingMember.name, 
             creditorUid: cred.uid, 
             creditorName: cred.name, 
-            count: 1 
+            count: 1,
+            createdAt: new Date() // Track creation
           });
         }
       });
@@ -155,6 +169,25 @@ export default function Group() {
       await updateDoc(doc(db, "groups", groupId), { members: newMembers, debts: newDebts });
       await addDoc(collection(db, "groups", groupId, "history"), { message: req.message, timestamp: new Date() });
       
+      // --- NOTIFICATIONS (Approve path) ---
+      try {
+        const batch = [];
+        recipientsMembers.forEach(recip => {
+           if (recip.uid === actingMember.uid) return;
+           batch.push(addDoc(collection(db, "users", recip.uid, "notifications"), {
+              type: type === 'deve' ? 'new_debt' : 'settled',
+              message: type === 'deve' 
+                 ? `🍺 ${formatName(actingMember.name)} ti ha segnato una birra!` 
+                 : `✅ ${formatName(actingMember.name)} ha saldato il debito!`,
+              read: false,
+              timestamp: new Date(),
+              link: `/group/${groupId}`,
+              groupId: groupId
+           }));
+        });
+        await Promise.all(batch);
+      } catch(e) { console.error("Error sending notifications:", e); }
+
       // Delete Request
       await deleteDoc(doc(db, "groups", groupId, "pendingTransactions", req.id));
 
@@ -252,9 +285,129 @@ export default function Group() {
     }
   };
 
+  const handleRecalculateBalances = async () => {
+    if (!confirm("Ricalcolare i saldi birre di TUTTI i membri basandosi sui debiti attuali? \nUtile se i conti non tornano.")) return;
+    
+    try {
+        const debts = group.debts || [];
+        const newMembers = group.members.map(m => {
+            // Calculate debts (positive) - what I owe
+            const debtsCount = debts
+                .filter(d => d.debtorUid === m.uid)
+                .reduce((sum, d) => sum + d.count, 0);
+            
+            // Calculate credits (negative logic in previous implementation?)
+            // Wait, previous logic was:
+            // "DEVE OFFRIRE" (Debtor) -> Postive Saldo (+1)
+            // "CREDITORE" (Creditor) -> Negative Saldo (-1)
+            
+            const creditsCount = debts
+                .filter(d => d.creditorUid === m.uid)
+                .reduce((sum, d) => sum + d.count, 0);
+            
+            return {
+                ...m,
+                saldoBirre: debtsCount - creditsCount
+            };
+        });
+
+        await updateDoc(doc(db, "groups", groupId), { members: newMembers });
+        
+        // Log it
+         await addDoc(collection(db, "groups", groupId, "history"), { 
+            message: `🔧 L'admin ha ricalcolato e sincronizzato i saldi di tutti i membri.`, 
+            timestamp: new Date()
+         });
+
+        alert("Saldi ricalcolati e corretti! ✅");
+        fetchGroup();
+        fetchHistory();
+
+    } catch(e) {
+        console.error("Recalc Error", e);
+        alert("Errore durante il ricalcolo.");
+    }
+  };
+
+  const handleAdminDeleteDebt = async (debtorName, targetCreditorUid, targetCreditorName, rawDebtorUid) => {
+    if (!confirm(`Rimuovere 1 birra dal debito verso ${targetCreditorName}?`)) return;
+    
+    try {
+        const newDebts = [...(group.debts || [])];
+        const targetIdx = newDebts.findIndex(d => 
+            d.debtorUid === rawDebtorUid && 
+            d.creditorUid === targetCreditorUid
+        );
+        
+        if (targetIdx >= 0) {
+            // 1. Update Debts
+            newDebts[targetIdx].count -= 1;
+            if (newDebts[targetIdx].count <= 0) {
+                newDebts.splice(targetIdx, 1);
+            }
+            
+            // 2. Update Members Balance (Debtor Only to match current logic)
+            // Note: Current app logic (add/settle) only updates the actor's balance. 
+            // To maintain consistency and avoid data corruption (e.g. creating false debts for creditors who started at 0),
+            // we only update the debtor here.
+            const newMembers = group.members.map(m => {
+                if (m.uid === rawDebtorUid) {
+                    return { ...m, saldoBirre: (m.saldoBirre || 0) - 1 };
+                }
+                return m;
+            });
+
+            // 3. Commit
+            await updateDoc(doc(db, "groups", groupId), { 
+                members: newMembers,
+                debts: newDebts 
+            });
+            
+            // 4. History
+            await addDoc(collection(db, "groups", groupId, "history"), { 
+                message: `L'amministratore del gruppo ha eliminato il debito di una birra di ${debtorName} nei confronti di ${targetCreditorName}`, 
+                timestamp: new Date() 
+            });
+
+            alert("Birra rimossa! 🍺💨");
+            
+            // 5. Refresh
+            fetchGroup(); 
+            fetchHistory();
+            
+            // Check if debt still exists for UI
+            const remaining = newDebts.find(d => d.debtorUid === rawDebtorUid && d.creditorUid === targetCreditorUid);
+            if (!remaining || remaining.count <= 0) {
+                 // Close modal or refresh detail? For now, we update the detail view if simple, 
+                 // but since we fetchGroup, closing might be safer or we need to update selectedDebtDetail state locally.
+                 // Let's close it to be safe/simple.
+                 setSelectedDebtDetail(null);
+            } else {
+                 // Update the local detail view manually to reflect change without closing
+                 setSelectedDebtDetail(prev => ({
+                    ...prev,
+                    details: prev.details.map(d => 
+                        d.creditorUid === targetCreditorUid ? { ...d, count: d.count - 1 } : d
+                    ).filter(d => d.count > 0)
+                 }));
+            }
+        }
+    } catch(e) { 
+        console.error(e); 
+        alert("Errore durante la rimozione"); 
+    }
+  };
+
   const handleSubmitTransaction = async () => {
     if (!selectedRecipients.length) return alert("Seleziona i destinatari");
     if (!actingUser) return alert("Seleziona chi paga/deve");
+    
+    // Safety check for self-debt
+    if (selectedRecipients.includes(actingUser)) {
+        alert("Non puoi avere debiti con te stesso! Seleziona qualcun altro.");
+        setSelectedRecipients(prev => prev.filter(id => id !== actingUser));
+        return;
+    }
 
     const actingMember = group.members.find(m => m.uid === actingUser);
     const recipientsMembers = group.members.filter(m => selectedRecipients.includes(m.uid));
@@ -308,7 +461,8 @@ export default function Group() {
           debtorName: actingMember.name, 
           creditorUid: cred.uid, 
           creditorName: cred.name, 
-          count: 1 
+          count: 1,
+          createdAt: new Date() // Track creation for Old Debt logic
         });
       }
     });
@@ -316,9 +470,94 @@ export default function Group() {
     await updateDoc(doc(db, "groups", groupId), { members: newMembers, debts: newDebts });
     await addDoc(collection(db, "groups", groupId, "history"), { message, timestamp: new Date() });
     
+    // --- NOTIFICATIONS ---
+    try {
+       const batch = [];
+       // Notify recipients
+       recipientsMembers.forEach(recip => {
+           if (recip.uid === actingMember.uid) return; // Should not happen but safety first
+           
+           const notifRef = collection(db, "users", recip.uid, "notifications");
+           const notifData = {
+              type: transType === 'deve' ? 'new_debt' : 'settled',
+              message: transType === 'deve' 
+                 ? `🍺 ${formatName(actingMember.name)} ti ha segnato una birra!` 
+                 : `✅ ${formatName(actingMember.name)} ha saldato il debito!`,
+              read: false,
+              timestamp: new Date(),
+              link: `/group/${groupId}`,
+              groupId: groupId
+           };
+           batch.push(addDoc(notifRef, notifData));
+       });
+       await Promise.all(batch);
+    } catch(e) { console.error("Error sending notifications:", e); }
+
     fetchGroup();
     fetchHistory();
   }
+
+  // ---- GHOST CHECK (Old Debt Shame) ----
+  const checkOldDebts = async (currentGroup) => {
+     if (!currentGroup || !currentGroup.debts) return;
+     
+     // Only run if we haven't checked recently to avoid spam (client-side simple debounce could go here, 
+     // but we rely on 'lastShamedAt' in DB)
+     
+     const now = new Date();
+     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+     
+     let shameFound = false;
+     let updatedDebts = [...currentGroup.debts];
+
+     for (let i = 0; i < updatedDebts.length; i++) {
+        const debt = updatedDebts[i];
+        
+        // Ensure createdAt exists (legacy support)
+        const createdAt = debt.createdAt ? (debt.createdAt.toDate ? debt.createdAt.toDate() : new Date(debt.createdAt)) : new Date(); 
+        // If legacy debt has no date, we assume it's new-ish or we can't shame it yet. 
+        // Realistically we should migrate data but for now we skip invalid dates.
+        
+        const timeDiff = now - createdAt;
+        
+        if (timeDiff > THIRTY_DAYS_MS) {
+            // Check if already shamed recently
+            const lastShamedAt = debt.lastShamedAt ? (debt.lastShamedAt.toDate ? debt.lastShamedAt.toDate() : new Date(debt.lastShamedAt)) : null;
+            
+            if (!lastShamedAt || (now - lastShamedAt) > SEVEN_DAYS_MS) {
+               // IT'S SHAME TIME! 🔔
+               shameFound = true;
+               updatedDebts[i].lastShamedAt = now;
+               
+               const shameMsg = `🕸️ RAGNATELE! ${formatName(debt.debtorName)} deve a ${formatName(debt.creditorName)} da 30 giorni! Paga!`;
+               
+               // 1. Add History Shame
+               addDoc(collection(db, "groups", groupId, "history"), { 
+                  message: shameMsg, 
+                  timestamp: now,
+                  type: 'shame'
+               });
+
+               // 2. Broadcast Notification to ALL members
+               currentGroup.members.forEach(m => {
+                  addDoc(collection(db, "users", m.uid, "notifications"), {
+                      type: 'shame',
+                      message: shameMsg,
+                      read: false,
+                      timestamp: now,
+                      link: `/group/${groupId}`,
+                      groupId: groupId
+                  });
+               });
+            }
+        }
+     }
+
+     if (shameFound) {
+        await updateDoc(doc(db, "groups", groupId), { debts: updatedDebts });
+     }
+  };
 
   async function processTransactionPending(actingMember, recipientsMembers, message) {
     await addDoc(collection(db, "groups", groupId, "pendingTransactions"), {
@@ -349,11 +588,17 @@ export default function Group() {
         grouped[d.debtorUid] = {
            debtorName: formatName(d.debtorName),
            total: 0,
-           details: []
+           details: [],
+           rawDebtorUid: d.debtorUid, // Needed for deletion logic
         };
       }
       grouped[d.debtorUid].total += d.count;
-      grouped[d.debtorUid].details.push({ to: formatName(d.creditorName), count: d.count });
+      grouped[d.debtorUid].details.push({ 
+        to: formatName(d.creditorName), 
+        count: d.count,
+        creditorUid: d.creditorUid, // Needed for deletion
+        creditorName: d.creditorName
+      });
     });
     return Object.values(grouped).sort((a,b) => b.total - a.total);
   }, [group?.debts]);
@@ -365,8 +610,8 @@ export default function Group() {
     <div className="min-h-screen bg-amber-50 p-4 pb-20">
       
       {/* Top Bar - Adjusted layout for better wrapping */}
-      <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
-        <div className="flex items-center gap-4 w-full">
+      <div className="max-w-3xl mx-auto flex flex-row items-center justify-between mb-8 gap-4">
+        <div className="flex-1 min-w-0 flex items-center gap-4">
            <button onClick={() => navigate('/dashboard')} className="p-2 bg-white rounded-full shadow-md text-gray-600 hover:text-black shrink-0">
              <ArrowLeft size={24} />
            </button>
@@ -400,6 +645,69 @@ export default function Group() {
                 <Trash2 size={16} />
               </button>
             )}
+
+           {/* Notification Bell */}
+           <div className="relative">
+             <button 
+               onClick={() => setShowNotifDrawer(!showNotifDrawer)}
+               className="p-2 rounded-full bg-amber-100 text-amber-700 shadow-sm hover:bg-amber-200 transition-colors relative"
+             >
+               <Bell size={24} />
+               {unreadCount > 0 && (
+                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold flex items-center justify-center rounded-full animate-pulse border-2 border-white">
+                   {unreadCount}
+                 </span>
+               )}
+             </button>
+
+             {/* Notification Drawer */}
+             {showNotifDrawer && (
+               <div className="absolute top-full right-0 mt-2 w-[85vw] max-w-xs sm:w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-40 animate-in fade-in slide-in-from-top-2">
+                 <div className="p-4 bg-beer-gold/10 border-b border-beer-gold/20 flex justify-between items-center">
+                   <h3 className="font-bold text-gray-800">Notifiche</h3>
+                   {unreadCount > 0 && (
+                     <button onClick={markAllAsRead} className="text-xs font-bold text-beer-dark hover:underline">
+                       Segna lette
+                     </button>
+                   )}
+                 </div>
+                 <div className="max-h-80 overflow-y-auto">
+                   {notifications.length === 0 ? (
+                     <div className="p-8 text-center text-gray-400 text-sm">
+                       Nessuna novità... tutto tace 🤫
+                     </div>
+                   ) : (
+                     <div className="divide-y divide-gray-50">
+                       {notifications.map(note => (
+                         <div 
+                           key={note.id} 
+                           onClick={() => {
+                             if (!note.read) markAsRead(note.id);
+                             if (note.link) window.location.href = note.link;
+                           }}
+                           className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${!note.read ? 'bg-blue-50/50' : ''}`}
+                         >
+                           <div className="flex gap-3">
+                             <div className="text-2xl shrink-0">
+                               {note.type === 'shame' ? '🕸️' : note.type === 'new_debt' ? '🍺' : '✅'}
+                             </div>
+                             <div>
+                               <p className={`text-sm text-left ${!note.read ? 'font-bold text-gray-900' : 'text-gray-600'}`}>
+                                 {note.message}
+                               </p>
+                               <p className="text-xs text-left text-gray-400 mt-1">
+                                 {note.timestamp?.seconds ? new Date(note.timestamp.seconds * 1000).toLocaleDateString() : 'Ora'}
+                               </p>
+                             </div>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   )}
+                 </div>
+               </div>
+             )}
+           </div>
         </div>
 
       {/* ADMIN PANEL - PENDING REQUESTS */}
@@ -416,54 +724,54 @@ export default function Group() {
                  {pendingRequests.map(req => (
                     <div key={req.id} className="flex flex-col sm:flex-row items-center justify-between bg-orange-50 p-4 rounded-xl border border-orange-100 gap-4">
                        
-                       {/* Request Info */}
-                       <div className="flex items-center gap-3 w-full">
-                          {/* Icon based on type */}
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 ${req.type === 'transaction' ? 'bg-blue-500' : 'bg-green-500'}`}>
-                             {req.type === 'transaction' ? 'Tx' : <User size={18} />}
-                          </div>
-                          
-                          <div className="flex-1">
-                             {req.type === 'transaction' ? (
-                                <div className="space-y-1">
-                                    <div className="flex flex-col">
-                                       <span className="text-xs text-gray-500 uppercase font-bold">Chi Deve Pagare:</span>
-                                       <span className="font-bold text-gray-800">{req.transType === 'deve' ? req.actingUserName : req.recipientsNames}</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                       <span className="text-xs text-gray-500 uppercase font-bold">A Chi:</span>
-                                       <span className="font-bold text-gray-800">{req.transType === 'deve' ? req.recipientsNames : req.actingUserName}</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                       <span className="text-xs text-gray-500 uppercase font-bold">Quando:</span>
-                                       <span className="text-xs text-gray-600 font-mono">{new Date(req.timestamp?.seconds * 1000).toLocaleString()}</span>
-                                    </div>
-                                    <div className="mt-1 pt-1 border-t border-orange-200">
-                                       <span className="text-xs italic text-gray-500">"{req.message}"</span>
-                                    </div>
-                                </div>
-                             ) : (
-                                <>
-                                   <p className="font-bold text-gray-800">Richiesta di accesso: {req.requesterName}</p>
-                                   <p className="text-xs text-gray-500">Vuole unirsi al gruppo</p>
-                                   <p className="text-xs text-gray-400 mt-1">{new Date(req.timestamp?.seconds * 1000).toLocaleString()}</p>
-                                </>
-                             )}
-                          </div>
-                       </div>
+                        {/* Request Info */}
+                        <div className="flex items-start gap-3 w-full min-w-0">
+                           {/* Icon based on type */}
+                           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 ${req.type === 'transaction' ? 'bg-blue-500' : 'bg-green-500'}`}>
+                              {req.type === 'transaction' ? 'Tx' : <User size={18} />}
+                           </div>
+                           
+                           <div className="flex-1 min-w-0">
+                              {req.type === 'transaction' ? (
+                                 <div className="space-y-1">
+                                     <div className="flex flex-col">
+                                        <span className="text-xs text-gray-500 uppercase font-bold">Chi Deve Pagare:</span>
+                                        <span className="font-bold text-gray-800 break-words">{req.transType === 'deve' ? req.actingUserName : req.recipientsNames}</span>
+                                     </div>
+                                     <div className="flex flex-col">
+                                        <span className="text-xs text-gray-500 uppercase font-bold">A Chi:</span>
+                                        <span className="font-bold text-gray-800 break-words">{req.transType === 'deve' ? req.recipientsNames : req.actingUserName}</span>
+                                     </div>
+                                     <div className="flex flex-col">
+                                        <span className="text-xs text-gray-500 uppercase font-bold">Quando:</span>
+                                        <span className="text-xs text-gray-600 font-mono">{new Date(req.timestamp?.seconds * 1000).toLocaleString()}</span>
+                                     </div>
+                                     <div className="mt-1 pt-1 border-t border-orange-200">
+                                        <span className="text-xs italic text-gray-500 break-words">"{req.message}"</span>
+                                     </div>
+                                 </div>
+                              ) : (
+                                 <>
+                                    <p className="font-bold text-gray-800 break-words">Richiesta di accesso: {req.requesterName}</p>
+                                    <p className="text-xs text-gray-500 break-words">Vuole unirsi al gruppo</p>
+                                    <p className="text-xs text-gray-400 mt-1">{new Date(req.timestamp?.seconds * 1000).toLocaleString()}</p>
+                                 </>
+                              )}
+                           </div>
+                        </div>
 
                        {/* Actions */}
-                       <div className="flex items-center gap-2 shrink-0">
+                       <div className="flex sm:flex-col md:flex-row items-center gap-2 shrink-0 self-end sm:self-center w-full sm:w-auto justify-end">
                           <button 
                              onClick={() => req.type === 'transaction' ? handleApproveTransaction(req) : handleApproveMember(req)}
-                             className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 shadow-md transition-colors"
+                             className="flex-1 sm:flex-none p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 shadow-md transition-colors flex justify-center"
                              title="Approva"
                           >
                              <Check size={20} />
                           </button>
                           <button 
                              onClick={() => handleRejectRequest(req)}
-                             className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-md transition-colors"
+                             className="flex-1 sm:flex-none p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-md transition-colors flex justify-center"
                              title="Rifiuta"
                           >
                              <X size={20} />
@@ -538,11 +846,22 @@ export default function Group() {
               <h3 className="font-black text-gray-700 flex items-center gap-2">
                  <FileText size={20} className="text-beer-amber" /> REGOLE DEL GIOCO
               </h3>
-              {isAdmin && !isEditingRules && (
-                <button onClick={() => setIsEditingRules(true)} className="text-gray-400 hover:text-black transition-colors">
-                   <Edit2 size={18} />
-                </button>
-              )}
+              <div className="flex gap-2">
+                 {isAdmin && (
+                    <button 
+                      onClick={handleRecalculateBalances}
+                      className="text-gray-400 hover:text-blue-500 transition-colors"
+                      title="Ricalcola Saldi (Fix Bug)"
+                    >
+                       <RefreshCw size={18} />
+                    </button>
+                 )}
+                 {isAdmin && !isEditingRules && (
+                    <button onClick={() => setIsEditingRules(true)} className="text-gray-400 hover:text-black transition-colors">
+                       <Edit2 size={18} />
+                    </button>
+                 )}
+              </div>
            </div>
            
            <div className="p-6">
@@ -600,37 +919,41 @@ export default function Group() {
 
           {consolidatedDebts.length > 0 ? (
             <div className="space-y-4">
-              {consolidatedDebts.map((item, i) => (
-                 <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-red-50 rounded-2xl border border-red-100 transform hover:scale-[1.01] transition-transform gap-4">
-                    
-                    {/* Left: Debtor Info */}
-                    <div className="flex items-center gap-4">
-                       <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center text-2xl animate-pulse shrink-0">🥵</div>
-                       <div>
-                          <p className="font-black text-xl text-gray-800">{item.debtorName}</p>
-                          <p className="text-xs text-red-500 font-bold uppercase tracking-wider">DEVE OFFRIRE</p>
-                       </div>
-                    </div>
-                    
-                    {/* Middle: Breakdown */}
-                    <div className="flex-1 text-sm text-gray-600 bg-white/50 p-3 rounded-lg border border-red-50">
-                       <ul className="space-y-1">
-                         {item.details.map((det, idx) => (
-                           <li key={idx} className="flex justify-between border-b last:border-0 border-red-100 pb-1 last:pb-0">
-                              <span>a <strong>{det.to}</strong></span>
-                              <span className="font-bold text-red-600">{det.count} 🍺</span>
-                           </li>
-                         ))}
-                       </ul>
-                    </div>
+               {consolidatedDebts.map((item, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => setSelectedDebtDetail(item)}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-red-50 rounded-2xl border border-red-100 transform hover:scale-[1.01] transition-transform gap-4 cursor-pointer hover:shadow-lg hover:border-red-200"
+                  >
+                     
+                     {/* Left: Debtor Info */}
+                     <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center text-2xl animate-pulse shrink-0">🥵</div>
+                        <div>
+                           <p className="font-black text-xl text-gray-800">{item.debtorName}</p>
+                           <p className="text-xs text-red-500 font-bold uppercase tracking-wider">DEVE OFFRIRE</p>
+                        </div>
+                     </div>
+                     
+                     {/* Middle: Breakdown */}
+                     <div className="flex-1 text-sm text-gray-600 bg-white/50 p-3 rounded-lg border border-red-50">
+                        <ul className="space-y-1">
+                          {item.details.map((det, idx) => (
+                            <li key={idx} className="flex justify-between border-b last:border-0 border-red-100 pb-1 last:pb-0">
+                               <span>a <strong>{det.to}</strong></span>
+                               <span className="font-bold text-red-600">{det.count} 🍺</span>
+                            </li>
+                          ))}
+                        </ul>
+                     </div>
 
-                    {/* Right: Total */}
-                    <div className="flex flex-col items-end shrink-0">
-                       <span className="text-4xl font-black text-red-600">{item.total}</span>
-                       <span className="text-sm font-bold text-gray-500 uppercase">TOTALE BIRRE</span>
-                    </div>
-                 </div>
-              ))}
+                     {/* Right: Total */}
+                     <div className="flex flex-col items-end shrink-0">
+                        <span className="text-4xl font-black text-red-600">{item.total}</span>
+                        <span className="text-sm font-bold text-gray-500 uppercase">TOTALE BIRRE</span>
+                     </div>
+                  </div>
+               ))}
             </div>
           ) : (
              <div className="text-center py-10">
@@ -670,33 +993,55 @@ export default function Group() {
                       </div>
                     </div>
                     
-                    <div>
-                       <div className="flex items-center gap-2">
-                         <p className="font-bold text-gray-800">{formatName(m.name)}</p>
-                         {m.role === 'admin' && <Crown size={14} className="text-yellow-500" />}
+                       <div className="flex flex-col">
+                          <p className="font-bold text-gray-800">{formatName(m.name)}</p>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">
+                             {m.role === 'admin' ? 'AMMINISTRATORE' : 'MEMBRO'}
+                          </p>
                        </div>
-                       <p className={`text-xs font-bold ${
-                         (m.saldoBirre || 0) > 0 ? 'text-red-500' : 
-                         (m.saldoBirre || 0) < 0 ? 'text-green-500' : 'text-gray-400'
-                       }`}>
-                          {m.saldoBirre > 0 ? 'IN DEBITO' : m.saldoBirre < 0 ? 'IN CREDITO' : 'PARI'}
-                       </p>
-                    </div>
                  </div>
 
-                 <div className="flex items-center gap-2">
-                    <div className={`px-3 py-1 rounded-xl font-black text-lg ${
-                       (m.saldoBirre || 0) > 0 ? 'bg-red-100 text-red-600' : 
-                       (m.saldoBirre || 0) < 0 ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                    }`}>
-                       {Math.abs(m.saldoBirre || 0)}
-                    </div>
-                    {isAdmin && m.uid !== currentUser.uid && (
-                       <button onClick={() => handleRemoveMember(m.uid)} className="text-gray-300 hover:text-red-500 transition-colors">
-                          <UserMinus size={18} />
-                       </button>
-                    )}
-                 </div>
+                  <div className="flex flex-col items-end gap-1">
+                     {(() => {
+                        const debtsCount = (group.debts || [])
+                            .filter(d => d.debtorUid === m.uid)
+                            .reduce((sum, d) => sum + d.count, 0);
+
+                        const creditsCount = (group.debts || [])
+                            .filter(d => d.creditorUid === m.uid)
+                            .reduce((sum, d) => sum + d.count, 0);
+
+                        return (
+                           <>
+                             {debtsCount > 0 && (
+                                <div className="px-3 py-1 rounded-xl font-black text-sm bg-red-100 text-red-600 flex items-center gap-1" title="Deve offrire">
+                                   <div className="w-4 h-4 rounded-full bg-red-200 flex items-center justify-center text-[10px]">🔴</div>
+                                   {debtsCount}
+                                </div>
+                             )}
+                             {creditsCount > 0 && (
+                                <div className="px-3 py-1 rounded-xl font-black text-sm bg-green-100 text-green-600 flex items-center gap-1" title="Deve ricevere">
+                                   <div className="w-4 h-4 rounded-full bg-green-200 flex items-center justify-center text-[10px]">🟢</div>
+                                   {creditsCount}
+                                </div>
+                             )}
+                             {debtsCount === 0 && creditsCount === 0 && (
+                                <span className="text-xs text-gray-400 font-bold px-2">PARI</span>
+                             )}
+                           </>
+                        );
+                     })()}
+                     
+                     {isAdmin && m.uid !== currentUser.uid && (
+                        <button 
+                          onClick={() => handleRemoveMember(m.uid)} 
+                          className="mt-2 px-3 py-1 bg-red-100/50 hover:bg-red-500 text-red-400 hover:text-white rounded-lg transition-all text-xs font-bold flex items-center gap-1 border border-red-200"
+                          title="Rimuovi Membro dal Gruppo"
+                        >
+                           <UserMinus size={14} /> Ban
+                        </button>
+                     )}
+                  </div>
               </div>
            ))}
         </div>
@@ -717,6 +1062,65 @@ export default function Group() {
         </div>
 
       </div>
+
+
+
+       {/* DEBT DETAIL MODAL */}
+       {selectedDebtDetail && (
+         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl p-6 w-full max-w-md relative shadow-2xl animate-in zoom-in-50 duration-300 border-4 border-beer-gold">
+               <button 
+                 onClick={() => setSelectedDebtDetail(null)}
+                 className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors"
+               >
+                 <X size={28} />
+               </button>
+
+               <div className="text-center mb-6">
+                 <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center text-4xl mx-auto mb-4 animate-bounce">🥵</div>
+                 <h2 className="text-2xl font-black text-gray-800">{selectedDebtDetail.debtorName}</h2>
+                 <p className="text-red-500 font-bold uppercase tracking-widest text-sm">ELENCO DEBITI</p>
+               </div>
+
+               <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-100 max-h-[60vh] overflow-y-auto">
+                 {selectedDebtDetail.details.map((det, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+                       <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-beer-gold text-white font-bold flex items-center justify-center text-xs">
+                             {getInitials(det.to)}
+                          </div>
+                          <div>
+                             <p className="text-sm text-gray-500">Deve a</p>
+                             <p className="font-bold text-gray-800">{det.to}</p>
+                          </div>
+                       </div>
+                       
+                       <div className="flex items-center gap-3">
+                          <span className="font-black text-xl text-beer-dark">{det.count} 🍺</span>
+                          
+                          {isAdmin && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAdminDeleteDebt(selectedDebtDetail.debtorName, det.creditorUid, det.to, selectedDebtDetail.rawDebtorUid);
+                              }}
+                              className="w-8 h-8 bg-red-100 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
+                              title="Rimuovi 1 Birra (Admin)"
+                            >
+                               <Trash2 size={16} />
+                            </button>
+                          )}
+                       </div>
+                    </div>
+                 ))}
+               </div>
+               
+               <p className="text-center text-xs text-gray-400 mt-4 italic">
+                  {isAdmin ? "Admin Mode: Puoi cancellare singole birre." : "Tocca a te pagare!"}
+               </p>
+            </div>
+         </div>
+       )}
 
       {/* MODAL */}
       {showModal && (
